@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, XCircle, Copy, FileDown, Check, Code2, Timer, Cable, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Send, XCircle, Copy, FileDown, Check, Code2, Timer, Cable, ShieldCheck, ShieldAlert, Globe, Lock, ArrowRightCircle } from "lucide-react";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useRequestStore } from "../store/useRequestStore";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { CodegenModal } from "./CodegenModal";
@@ -36,6 +37,10 @@ export function RequestPanel() {
     setName,
     setTimeoutMs,
     setVerifyTls,
+    setRedirectPolicy,
+    setMaxRedirects,
+    setProxyUrl,
+    setClientCert,
     setProtocol,
     setGraphqlQuery,
     setGraphqlVariables,
@@ -484,6 +489,132 @@ export function RequestPanel() {
                   This request skips TLS verification.
                 </p>
               )}
+            </div>
+
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">
+                <ArrowRightCircle size={11} />
+                Redirects
+              </label>
+              <div className="flex items-center gap-2">
+                <select
+                  value={activeRequest.redirectPolicy ?? "follow"}
+                  onChange={(e) =>
+                    setRedirectPolicy(e.target.value as "follow" | "none" | "manual")
+                  }
+                  className="input-apple w-40 text-[12px]"
+                >
+                  <option value="follow">Follow (default)</option>
+                  <option value="none">Do not follow</option>
+                </select>
+                {(activeRequest.redirectPolicy ?? "follow") === "follow" && (
+                  <>
+                    <span className="text-[11px] text-text-tertiary">max</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      value={activeRequest.maxRedirects ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value.trim();
+                        if (v === "") setMaxRedirects(undefined);
+                        else {
+                          const n = parseInt(v, 10);
+                          if (Number.isFinite(n) && n >= 0) setMaxRedirects(n);
+                        }
+                      }}
+                      placeholder="10"
+                      className="input-apple w-20 text-[12px]"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">
+                <Globe size={11} />
+                Proxy
+              </label>
+              <input
+                type="text"
+                value={activeRequest.proxyUrl ?? ""}
+                onChange={(e) => setProxyUrl(e.target.value || undefined)}
+                placeholder="http://user:pass@host:8080  or  socks5://host:1080"
+                className="input-apple w-full text-[12px] font-mono"
+              />
+              <p className="text-[11px] text-text-tertiary mt-1">
+                Routes this request through the given proxy. Supports HTTP, HTTPS, and SOCKS5.
+              </p>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">
+                <Lock size={11} />
+                Client certificate (mTLS)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={activeRequest.clientCert?.path ?? ""}
+                  onChange={(e) => {
+                    const path = e.target.value;
+                    if (!path) setClientCert(undefined);
+                    else
+                      setClientCert({
+                        path,
+                        password: activeRequest.clientCert?.password,
+                      });
+                  }}
+                  placeholder="Path to .p12 / .pfx bundle"
+                  className="input-apple flex-1 text-[12px] font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const picked = await openFileDialog({
+                      multiple: false,
+                      filters: [
+                        { name: "PKCS#12 bundle", extensions: ["p12", "pfx"] },
+                      ],
+                    });
+                    if (typeof picked === "string")
+                      setClientCert({
+                        path: picked,
+                        password: activeRequest.clientCert?.password,
+                      });
+                  }}
+                  className="text-[11px] px-2 py-1 rounded-md bg-surface-secondary hover:bg-surface-tertiary text-text-secondary"
+                >
+                  Browse…
+                </button>
+                {activeRequest.clientCert?.path && (
+                  <button
+                    type="button"
+                    onClick={() => setClientCert(undefined)}
+                    className="text-[11px] px-2 py-1 rounded-md hover:bg-error/10 text-error"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {activeRequest.clientCert?.path && (
+                <input
+                  type="password"
+                  value={activeRequest.clientCert?.password ?? ""}
+                  onChange={(e) =>
+                    setClientCert({
+                      path: activeRequest.clientCert!.path,
+                      password: e.target.value || undefined,
+                    })
+                  }
+                  placeholder="Bundle passphrase (optional)"
+                  className="input-apple w-full mt-2 text-[12px] font-mono"
+                />
+              )}
+              <p className="text-[11px] text-text-tertiary mt-1">
+                PKCS#12 bundle containing both the client cert and its private key.
+              </p>
             </div>
           </div>
         )}

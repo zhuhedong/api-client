@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
-import { Copy, Check, ArrowUpRight, Search, X } from "lucide-react";
+import { Copy, Check, ArrowUpRight, Search, X, Download, AlertTriangle, FileQuestion } from "lucide-react";
+import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { useRequestStore } from "../store/useRequestStore";
 
 type ResponseTab = "body" | "headers";
@@ -83,19 +85,70 @@ function isJson(str: string): boolean {
   }
 }
 
+function extractMime(headers: Record<string, string>): string {
+  const ct =
+    headers["content-type"] ||
+    headers["Content-Type"] ||
+    Object.entries(headers).find(([k]) => k.toLowerCase() === "content-type")?.[1] ||
+    "";
+  return ct.split(";")[0].trim().toLowerCase();
+}
+
+function defaultFileName(url: string, mime: string): string {
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").filter(Boolean).pop();
+    if (last && last.includes(".")) return last;
+  } catch {}
+  const ext = mime.split("/")[1] || "bin";
+  return `response.${ext.replace(/\+.*$/, "")}`;
+}
+
+/// Render the first N bytes of a base64-encoded body as a classic hex dump.
+function hexDump(base64: string, maxBytes = 4096): string {
+  let bytes: Uint8Array;
+  try {
+    const bin = atob(base64);
+    bytes = new Uint8Array(Math.min(bin.length, maxBytes));
+    for (let i = 0; i < bytes.length; i++) bytes[i] = bin.charCodeAt(i);
+  } catch {
+    return "(invalid base64 body)";
+  }
+  const lines: string[] = [];
+  for (let off = 0; off < bytes.length; off += 16) {
+    const chunk = bytes.slice(off, off + 16);
+    const hex = Array.from(chunk)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" ")
+      .padEnd(16 * 3 - 1, " ");
+    const ascii = Array.from(chunk)
+      .map((b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : "."))
+      .join("");
+    lines.push(`${off.toString(16).padStart(8, "0")}  ${hex}  ${ascii}`);
+  }
+  return lines.join("\n");
+}
+
 export function ResponsePanel() {
   const [activeTab, setActiveTab] = useState<ResponseTab>("body");
   const [copied, setCopied] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { response, loading, error } = useRequestStore();
+  const { response, loading, error, activeRequest } = useRequestStore();
+
+  const isBinary = response?.body_encoding === "base64";
+  const mime = useMemo(() => (response ? extractMime(response.headers) : ""), [response]);
 
   const formattedBody = useMemo(() => {
-    if (!response?.body) return "";
+    if (!response?.body || isBinary) return "";
     return isJson(response.body) ? tryFormatJson(response.body) : response.body;
-  }, [response?.body]);
+  }, [response?.body, isBinary]);
 
-  const bodyIsJson = useMemo(() => response ? isJson(response.body) : false, [response?.body]);
+  const bodyIsJson = useMemo(
+    () => (response && !isBinary ? isJson(response.body) : false),
+    [response?.body, isBinary]
+  );
 
   const highlightedSearchBody = useMemo(() => {
     if (!searchQuery || !formattedBody) return null;
@@ -132,6 +185,20 @@ export function ResponsePanel() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const saveResponseToDisk = async () => {
+    if (!response) return;
+    const suggested = defaultFileName(activeRequest?.url || "", mime);
+    const path = await saveFileDialog({ defaultPath: suggested });
+    if (!path) return;
+    await invoke("save_response_to_file", {
+      path,
+      body: response.body,
+      encoding: response.body_encoding,
+    });
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
   };
 
   if (loading) {
@@ -213,6 +280,13 @@ export function ResponsePanel() {
           >
             {copied ? <Check size={14} className="text-success" /> : <Copy size={14} className="text-text-tertiary" />}
           </button>
+          <button
+            onClick={saveResponseToDisk}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 active:bg-black/8 transition-colors"
+            title="Save response to file"
+          >
+            {savedFlash ? <Check size={14} className="text-success" /> : <Download size={14} className="text-text-tertiary" />}
+          </button>
         </div>
       </div>
 
@@ -243,7 +317,43 @@ export function ResponsePanel() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-4 pb-4">
-        {activeTab === "body" && (
+        {activeTab === "body" && response.body_truncated && (
+          <div className="mb-2 flex items-center gap-2 text-[11px] text-warning bg-warning/10 rounded-apple px-2.5 py-1.5">
+            <AlertTriangle size={12} />
+            Response was truncated for display ({formatSize(response.size_bytes)}). Use
+            <button onClick={saveResponseToDisk} className="underline hover:no-underline">Save</button>
+            to get the full body.
+          </div>
+        )}
+        {activeTab === "body" && isBinary && mime.startsWith("image/") && (
+          <div className="flex items-center justify-center bg-surface-secondary rounded-apple p-3">
+            <img
+              src={`data:${mime};base64,${response.body}`}
+              alt="response"
+              className="max-w-full max-h-[480px] object-contain"
+            />
+          </div>
+        )}
+        {activeTab === "body" && isBinary && mime === "application/pdf" && (
+          <iframe
+            title="PDF preview"
+            src={`data:application/pdf;base64,${response.body}`}
+            className="w-full h-[640px] bg-surface-secondary rounded-apple"
+          />
+        )}
+        {activeTab === "body" && isBinary && !mime.startsWith("image/") && mime !== "application/pdf" && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[11px] text-text-tertiary">
+              <FileQuestion size={12} />
+              Binary response ({mime || "unknown type"}, {formatSize(response.size_bytes)}). Hex dump of
+              first 4&thinsp;KiB:
+            </div>
+            <pre className="text-[11px] font-mono text-text-primary whitespace-pre leading-[1.55] bg-surface-secondary rounded-apple p-3 overflow-auto">
+              {hexDump(response.body)}
+            </pre>
+          </div>
+        )}
+        {activeTab === "body" && !isBinary && (
           <pre className="text-[12px] font-mono text-text-primary whitespace-pre-wrap break-all leading-[1.65] bg-surface-secondary rounded-apple p-3">
             {searchQuery
               ? highlightedSearchBody

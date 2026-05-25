@@ -141,6 +141,10 @@ interface RequestState {
   setName: (name: string) => void;
   setTimeoutMs: (ms: number | undefined) => void;
   setVerifyTls: (verify: boolean | undefined) => void;
+  setRedirectPolicy: (policy: "follow" | "none" | "manual" | undefined) => void;
+  setMaxRedirects: (n: number | undefined) => void;
+  setProxyUrl: (url: string | undefined) => void;
+  setClientCert: (cert: RequestItem["clientCert"]) => void;
   setProtocol: (protocol: "http" | "websocket") => void;
   setGraphqlQuery: (q: string) => void;
   setGraphqlVariables: (v: string) => void;
@@ -398,6 +402,10 @@ export const useRequestStore = create<RequestState>((set, get) => {
     setName: (name) => set((s) => ({ ...updateActiveTab(s, { name }), ...syncDerived({ ...s, ...updateActiveTab(s, { name }) } as RequestState) })),
     setTimeoutMs: (timeoutMs) => set((s) => ({ ...updateActiveTab(s, { timeoutMs }), ...syncDerived({ ...s, ...updateActiveTab(s, { timeoutMs }) } as RequestState) })),
     setVerifyTls: (verifyTls) => set((s) => ({ ...updateActiveTab(s, { verifyTls }), ...syncDerived({ ...s, ...updateActiveTab(s, { verifyTls }) } as RequestState) })),
+    setRedirectPolicy: (redirectPolicy) => set((s) => ({ ...updateActiveTab(s, { redirectPolicy }), ...syncDerived({ ...s, ...updateActiveTab(s, { redirectPolicy }) } as RequestState) })),
+    setMaxRedirects: (maxRedirects) => set((s) => ({ ...updateActiveTab(s, { maxRedirects }), ...syncDerived({ ...s, ...updateActiveTab(s, { maxRedirects }) } as RequestState) })),
+    setProxyUrl: (proxyUrl) => set((s) => ({ ...updateActiveTab(s, { proxyUrl }), ...syncDerived({ ...s, ...updateActiveTab(s, { proxyUrl }) } as RequestState) })),
+    setClientCert: (clientCert) => set((s) => ({ ...updateActiveTab(s, { clientCert }), ...syncDerived({ ...s, ...updateActiveTab(s, { clientCert }) } as RequestState) })),
     setProtocol: (protocol) => set((s) => ({ ...updateActiveTab(s, { protocol }), ...syncDerived({ ...s, ...updateActiveTab(s, { protocol }) } as RequestState) })),
     setGraphqlQuery: (graphqlQuery) => set((s) => ({ ...updateActiveTab(s, { graphqlQuery }), ...syncDerived({ ...s, ...updateActiveTab(s, { graphqlQuery }) } as RequestState) })),
     setGraphqlVariables: (graphqlVariables) => set((s) => ({ ...updateActiveTab(s, { graphqlVariables }), ...syncDerived({ ...s, ...updateActiveTab(s, { graphqlVariables }) } as RequestState) })),
@@ -511,6 +519,13 @@ export const useRequestStore = create<RequestState>((set, get) => {
           timeout_ms: req.timeoutMs ?? get().defaultTimeoutMs,
           request_id: req.id,
           verify_tls: req.verifyTls ?? get().verifyTlsDefault,
+          redirect_policy: req.redirectPolicy ?? null,
+          max_redirects: req.maxRedirects ?? null,
+          proxy_url: req.proxyUrl?.trim() ? req.proxyUrl.trim() : null,
+          client_cert:
+            req.clientCert && req.clientCert.path
+              ? { path: req.clientCert.path, password: req.clientCert.password ?? null }
+              : null,
         };
 
         const response = await invoke<ResponseData>("send_request", { payload });
