@@ -45,6 +45,23 @@ export interface RequestItem {
    *  - `false`: skip verification (useful for self-signed certs in dev).
    */
   verifyTls?: boolean;
+  /**
+   * Redirect behavior. `undefined` defaults to `"follow"`.
+   *  - `"follow"`: follow up to `maxRedirects` (default 10).
+   *  - `"none"` / `"manual"`: return the first 3xx response untouched.
+   */
+  redirectPolicy?: "follow" | "none" | "manual";
+  /** Cap on redirects when redirectPolicy is "follow". */
+  maxRedirects?: number;
+  /** Outbound proxy URL (http/https/socks5). */
+  proxyUrl?: string;
+  /** Client certificate (mTLS). */
+  clientCert?: {
+    /** PKCS#12 bundle on disk. */
+    path: string;
+    /** Bundle passphrase. */
+    password?: string;
+  };
   /** Protocol selector: HTTP request or WebSocket connection. */
   protocol?: Protocol;
   /** GraphQL query and variables when bodyType === "graphql". */
@@ -59,6 +76,10 @@ export interface ResponseData {
   status_text: string;
   headers: Record<string, string>;
   body: string;
+  /** `"text"` if body is UTF-8 text, `"base64"` if body is base64-encoded binary. */
+  body_encoding: "text" | "base64";
+  /** True when the inline body was truncated; size_bytes still reflects the full size. */
+  body_truncated: boolean;
   time_ms: number;
   size_bytes: number;
 }
