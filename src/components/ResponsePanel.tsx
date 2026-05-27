@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Check, ArrowUpRight, Search, X, Download, AlertTriangle, FileQuestion, GitCompare, ListTree, FileCode2, Filter, MoreHorizontal, Link2, Terminal, Archive, Variable } from "lucide-react";
+import { Copy, Check, ArrowUpRight, Search, X, Download, AlertTriangle, FileQuestion, GitCompare, ListTree, FileCode2, Filter, MoreHorizontal, Link2, Terminal, Archive, Variable, ChevronUp, ChevronDown } from "lucide-react";
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { JsonView, defaultStyles, darkStyles } from "react-json-view-lite";
@@ -162,6 +162,8 @@ export function ResponsePanel() {
   // behaves like a native menu.
   const [moreOpen, setMoreOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchMatchRefs = useRef<Array<HTMLElement | null>>([]);
+  const [activeSearchMatch, setActiveSearchMatch] = useState(0);
   const [saveVariableOpen, setSaveVariableOpen] = useState(false);
   // One-shot status banner shown briefly after a copy / save action so the
   // user gets non-blocking visual feedback. Each entry is { kind, text };
@@ -237,9 +239,26 @@ export function ResponsePanel() {
   const isDark = useDarkMode();
   const treeStyles = isDark ? darkStyles : defaultStyles;
 
+  const searchMatchCount = useMemo(() => {
+    if (!searchQuery || !displayBody) return 0;
+    const query = searchQuery.toLowerCase();
+    const source = displayBody.toLowerCase();
+    let count = 0;
+    let offset = 0;
+    while (offset < source.length) {
+      const idx = source.indexOf(query, offset);
+      if (idx === -1) break;
+      count += 1;
+      offset = idx + query.length;
+    }
+    return count;
+  }, [searchQuery, displayBody]);
+
   const highlightedSearchBody = useMemo(() => {
-    if (!searchQuery || !formattedBody) return null;
-    const lines = formattedBody.split("\n");
+    searchMatchRefs.current = [];
+    if (!searchQuery || !displayBody) return null;
+    const lines = displayBody.split("\n");
+    let matchIndex = 0;
     return lines.map((line, i) => {
       if (!line.toLowerCase().includes(searchQuery.toLowerCase())) {
         return <div key={i} className="leading-[1.65]">{line || " "}</div>;
@@ -255,8 +274,16 @@ export function ResponsePanel() {
           break;
         }
         if (idx > 0) parts.push(<span key={key++}>{remaining.slice(0, idx)}</span>);
+        const currentMatchIndex = matchIndex++;
+        const isActiveMatch = currentMatchIndex === activeSearchMatch;
         parts.push(
-          <mark key={key++} className="bg-warning/40 text-text-primary rounded-sm px-0.5">
+          <mark
+            key={key++}
+            ref={(el) => {
+              searchMatchRefs.current[currentMatchIndex] = el;
+            }}
+            className={`${isActiveMatch ? "bg-warning text-text-primary ring-1 ring-warning/60" : "bg-warning/40 text-text-primary"} rounded-sm px-0.5`}
+          >
             {remaining.slice(idx, idx + searchQuery.length)}
           </mark>
         );
@@ -264,7 +291,25 @@ export function ResponsePanel() {
       }
       return <div key={i} className="leading-[1.65]">{parts}</div>;
     });
-  }, [searchQuery, formattedBody]);
+  }, [searchQuery, displayBody, activeSearchMatch]);
+
+  useEffect(() => {
+    setActiveSearchMatch(0);
+  }, [searchQuery, displayBody]);
+
+  useEffect(() => {
+    if (!searchOpen || activeTab !== "body" || !searchQuery || searchMatchCount === 0) return;
+    searchMatchRefs.current[activeSearchMatch]?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [activeTab, searchOpen, searchQuery, searchMatchCount, activeSearchMatch]);
+
+  const goToSearchMatch = (direction: "previous" | "next") => {
+    if (searchMatchCount === 0) return;
+    setActiveSearchMatch((current) =>
+      direction === "next"
+        ? (current + 1) % searchMatchCount
+        : (current - 1 + searchMatchCount) % searchMatchCount,
+    );
+  };
 
   const copyBody = async () => {
     if (response?.body) {
@@ -435,9 +480,9 @@ export function ResponsePanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Status bar */}
-      <div className="flex items-center gap-2.5 px-4 py-2.5">
+      <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 bg-surface">
         <span className={`px-2 py-[3px] rounded-md text-[11px] font-semibold ${getStatusStyle(response.status)}`}>
           {response.status} {response.status_text}
         </span>
@@ -595,7 +640,7 @@ export function ResponsePanel() {
           user knows the clipboard / store mutation succeeded without an
           extra modal. Auto-clears after 2 s via the effect above. */}
       {actionFlash && (
-        <div className="px-4 pb-1.5">
+        <div className="shrink-0 px-4 pb-1.5 bg-surface">
           <div className="inline-flex items-center gap-1.5 text-[11px] text-success bg-success/10 rounded-md px-2 py-1">
             <Check size={11} />
             {actionFlash}
@@ -605,7 +650,7 @@ export function ResponsePanel() {
 
       {/* JSONPath bar */}
       {jsonPathOpen && activeTab === "body" && bodyIsJson && (
-        <div className="px-4 pb-2">
+        <div className="shrink-0 px-4 pb-2 bg-surface">
           <div className="relative">
             <Filter size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
             <input
@@ -633,31 +678,61 @@ export function ResponsePanel() {
 
       {/* Search bar */}
       {searchOpen && activeTab === "body" && (
-        <div className="px-4 pb-2">
+        <div className="shrink-0 px-4 pb-2 bg-surface">
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                goToSearchMatch(e.shiftKey ? "previous" : "next");
+              }}
               placeholder={t("response.search_placeholder")}
               autoFocus
-              className="input-apple w-full text-[12px] py-[5px] pl-8 pr-7"
+              className="input-apple w-full text-[12px] py-[5px] pl-8 pr-36"
             />
             {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary"
-              >
-                <X size={12} />
-              </button>
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-text-tertiary">
+                <span className="min-w-[42px] text-right text-[11px] tabular-nums">
+                  {searchMatchCount > 0 ? `${activeSearchMatch + 1}/${searchMatchCount}` : "0/0"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => goToSearchMatch("previous")}
+                  disabled={searchMatchCount === 0}
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-black/5 disabled:opacity-35 disabled:cursor-not-allowed"
+                  title="Previous match"
+                >
+                  <ChevronUp size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToSearchMatch("next")}
+                  disabled={searchMatchCount === 0}
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-black/5 disabled:opacity-35 disabled:cursor-not-allowed"
+                  title="Next match"
+                >
+                  <ChevronDown size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-black/5 hover:text-text-secondary"
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-auto px-4 pb-4">
+      <div className="flex-1 min-h-0 overflow-auto px-4 pb-4">
         {activeTab === "body" && response.body_truncated && (
           <div className="mb-2 flex items-center gap-2 text-[11px] text-warning bg-warning/10 rounded-apple px-2.5 py-1.5">
             <AlertTriangle size={12} />

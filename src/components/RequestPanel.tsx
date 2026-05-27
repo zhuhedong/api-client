@@ -13,7 +13,7 @@ import { exportCurl, parseCurl } from "../utils/curl";
 import { describeInherited } from "../utils/auth";
 import { tagColor } from "../utils/tagColor";
 import { buildScopedVars } from "../utils/variableScope";
-import type { HttpMethod } from "../types";
+import type { HttpMethod, KeyValue } from "../types";
 
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
@@ -44,6 +44,30 @@ const METHOD_COLORS: Record<HttpMethod, string> = {
 
 type RequestTab = "params" | "headers" | "body" | "auth" | "pre" | "tests" | "settings";
 
+function createParam(key = "", value = ""): KeyValue {
+  return { id: Math.random().toString(36).substring(2, 15), key, value, enabled: true };
+}
+
+function parseUrlQueryParams(rawUrl: string): { url: string; params: KeyValue[] } | null {
+  const hashIndex = rawUrl.indexOf("#");
+  const queryIndex = rawUrl.indexOf("?");
+  if (queryIndex === -1 || (hashIndex !== -1 && queryIndex > hashIndex)) return null;
+
+  const queryEnd = hashIndex === -1 ? rawUrl.length : hashIndex;
+  const query = rawUrl.slice(queryIndex + 1, queryEnd);
+  if (!query) return null;
+
+  const params = Array.from(new URLSearchParams(query).entries()).map(([key, value]) =>
+    createParam(key, value),
+  );
+  if (params.length === 0) return null;
+
+  return {
+    url: `${rawUrl.slice(0, queryIndex)}${hashIndex === -1 ? "" : rawUrl.slice(hashIndex)}`,
+    params: [...params, createParam()],
+  };
+}
+
 export function RequestPanel() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<RequestTab>("params");
@@ -71,6 +95,7 @@ export function RequestPanel() {
     setPreScript,
     setTestScript,
     setTags,
+    updateActiveRequest,
     sendRequest,
     cancelRequest,
     defaultTimeoutMs,
@@ -150,6 +175,18 @@ export function RequestPanel() {
   const headerCount = activeRequest.headers.filter((h) => h.key).length;
   const currentAuth = activeRequest.auth || { auth_type: "none" as const };
   const inheritedDescription = describeInherited(activeRequest, collections);
+
+  const applyUrlQueryParams = (rawUrl: string): boolean => {
+    const parsed = parseUrlQueryParams(rawUrl);
+    if (parsed) {
+      updateActiveRequest({ url: parsed.url, params: parsed.params });
+      setActiveTab("params");
+      return true;
+    }
+    return false;
+  };
+
+  const handleUrlChange = (rawUrl: string) => setUrl(rawUrl);
 
   return (
     <div className="flex flex-col h-full">
@@ -285,9 +322,19 @@ export function RequestPanel() {
           ref={urlRef}
           type="text"
           value={activeRequest.url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => handleUrlChange(e.target.value)}
+          onBlur={(e) => applyUrlQueryParams(e.currentTarget.value)}
+          onPaste={() => {
+            window.setTimeout(() => {
+              const value = urlRef.current?.value;
+              if (value) applyUrlQueryParams(value);
+            }, 0);
+          }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !isStreaming) sendRequest();
+            if (e.key === "Enter" && !isStreaming) {
+              applyUrlQueryParams(e.currentTarget.value);
+              sendRequest();
+            }
           }}
           placeholder={
             isWs

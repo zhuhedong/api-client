@@ -142,6 +142,17 @@ fn is_text_mime(ct: &str) -> bool {
         || mime.ends_with("+xml")
 }
 
+/// Some APIs return JSON without a useful Content-Type. If the bytes are
+/// valid UTF-8 and start like a JSON document, treat them as text so the
+/// frontend can parse and render the response body.
+fn looks_like_json_body(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let trimmed = text.trim_start();
+    trimmed.starts_with('{') || trimmed.starts_with('[')
+}
+
 pub struct ActiveRequests {
     map: Mutex<HashMap<String, CancellationToken>>,
 }
@@ -533,7 +544,8 @@ async fn send_request(
         .get("content-type")
         .cloned()
         .unwrap_or_default();
-    let (body, body_encoding) = if is_text_mime(&content_type) {
+    let (body, body_encoding) = if is_text_mime(&content_type) || looks_like_json_body(display_bytes)
+    {
         (
             String::from_utf8_lossy(display_bytes).to_string(),
             "text".to_string(),
@@ -1076,6 +1088,19 @@ mod tests {
         // we'd rather base64 a body than corrupt binary data.
         assert!(!is_text_mime(""));
         assert!(!is_text_mime("   "));
+    }
+
+    #[test]
+    fn looks_like_json_body_accepts_json_documents() {
+        assert!(looks_like_json_body(br#"{"ok":true}"#));
+        assert!(looks_like_json_body(b"\n  [1, 2, 3]"));
+    }
+
+    #[test]
+    fn looks_like_json_body_rejects_non_json_or_non_utf8() {
+        assert!(!looks_like_json_body(b"hello"));
+        assert!(!looks_like_json_body(b""));
+        assert!(!looks_like_json_body(&[0xff, 0xfe, b'{']));
     }
 
     #[test]

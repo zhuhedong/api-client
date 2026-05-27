@@ -247,11 +247,11 @@ function App() {
         onChange={setSidebarWidth}
         onCommit={(v) => setWindowState({ sidebar_width: Math.round(v) })}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <TabBar />
-        <div className="flex-1 flex flex-col gap-0 p-3 pl-0 h-full">
+        <div className="flex-1 min-h-0 flex flex-col gap-0 p-3 pl-0 overflow-hidden">
           <div
-            className="bg-surface rounded-t-apple-lg shadow-apple overflow-hidden flex flex-col"
+            className="shrink-0 bg-surface rounded-t-apple-lg shadow-apple overflow-hidden flex flex-col"
             style={{ height: `${reqPanelPct}%` }}
           >
             <RequestPanel />
@@ -264,7 +264,7 @@ function App() {
             onChange={setReqPanelPct}
             onCommit={(v) => setWindowState({ request_panel_height: Math.round(v) })}
           />
-          <div className="bg-surface rounded-b-apple-lg shadow-apple overflow-hidden flex-1 flex flex-col border-t border-border-light">
+          <div className="min-h-0 bg-surface rounded-b-apple-lg shadow-apple overflow-hidden flex-1 flex flex-col border-t border-border-light">
             {isWs ? <WsPanel /> : isSse ? <SsePanel /> : <ResponsePanel />}
           </div>
         </div>
