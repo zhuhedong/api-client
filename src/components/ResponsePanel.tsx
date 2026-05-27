@@ -769,7 +769,7 @@ export function ResponsePanel() {
             </pre>
           </div>
         )}
-        {activeTab === "body" && !isBinary && bodyView === "tree" && bodyIsJson && displayJson !== undefined && (
+        {activeTab === "body" && !isBinary && bodyView === "tree" && !searchQuery && bodyIsJson && displayJson !== undefined && (
           <div className="text-[12px] font-mono bg-surface-secondary rounded-apple p-3 overflow-auto json-tree-host">
             <JsonView
               data={(typeof displayJson === "object" && displayJson !== null
@@ -781,7 +781,7 @@ export function ResponsePanel() {
             />
           </div>
         )}
-        {activeTab === "body" && !isBinary && (bodyView === "raw" || !bodyIsJson || displayJson === undefined) && (
+        {activeTab === "body" && !isBinary && (bodyView === "raw" || searchQuery || !bodyIsJson || displayJson === undefined) && (
           <pre className="text-[12px] font-mono text-text-primary whitespace-pre-wrap break-all leading-[1.65] bg-surface-secondary rounded-apple p-3">
             {searchQuery
               ? highlightedSearchBody
