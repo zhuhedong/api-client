@@ -29,10 +29,10 @@ jobs:
           # runner. The Apple Silicon runner ships the full universal
           # macOS SDK, so cross-compiling x86_64 from arm64 works
           # natively via the `x86_64-apple-darwin` Rust target.
-          - { os-name: macOS (Apple Silicon), runner: macos-14,     rust-target: aarch64-apple-darwin, args: "--target aarch64-apple-darwin" }
-          - { os-name: macOS (Intel),         runner: macos-14,     rust-target: x86_64-apple-darwin,  args: "--target x86_64-apple-darwin" }
-          - { os-name: Linux (x86_64),        runner: ubuntu-22.04, rust-target: "",                    args: "" }
-          - { os-name: Windows (x86_64),      runner: windows-latest, rust-target: "",                  args: "" }
+          - { os-name: macOS (Apple Silicon), runner: macos-14,     rust-target: aarch64-apple-darwin, args: "--target aarch64-apple-darwin", artifact-name: api-client-macos-aarch64, artifact-path: "src-tauri/target/aarch64-apple-darwin/release/bundle/**/*" }
+          - { os-name: macOS (Intel),         runner: macos-14,     rust-target: x86_64-apple-darwin,  args: "--target x86_64-apple-darwin",  artifact-name: api-client-macos-x86_64,  artifact-path: "src-tauri/target/x86_64-apple-darwin/release/bundle/**/*" }
+          - { os-name: Linux (x86_64),        runner: ubuntu-22.04, rust-target: "",                    args: "",                         artifact-name: api-client-linux-x86_64,  artifact-path: "src-tauri/target/release/bundle/**/*" }
+          - { os-name: Windows (x86_64),      runner: windows-latest, rust-target: "",                  args: "",                         artifact-name: api-client-windows-x86_64, artifact-path: "src-tauri/target/release/bundle/**/*" }
     steps:
       - uses: actions/checkout@v4
 
@@ -76,3 +76,10 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.platform.args }}
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform.artifact-name }}
+          path: ${{ matrix.platform.artifact-path }}
+          if-no-files-found: error
