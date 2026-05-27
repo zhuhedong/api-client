@@ -68,6 +68,68 @@ describe("exportCurl", () => {
     expect(out).toMatch(/q=search%20term/);
     expect(out).not.toMatch(/skip=/);
   });
+
+  it("leaves {{var}} placeholders intact when no envVars are passed", () => {
+    const out = exportCurl(
+      makeRequest({ url: "https://{{host}}/users" }),
+    );
+    expect(out).toContain("'https://{{host}}/users'");
+  });
+
+  it("substitutes {{var}} placeholders in the URL when envVars are passed", () => {
+    const out = exportCurl(
+      makeRequest({ url: "https://{{host}}/users" }),
+      { host: "api.example.com" },
+    );
+    expect(out).toContain("'https://api.example.com/users'");
+    expect(out).not.toContain("{{host}}");
+  });
+
+  it("substitutes {{var}} placeholders in headers", () => {
+    const out = exportCurl(
+      makeRequest({
+        headers: [
+          { id: "1", key: "X-Trace", value: "{{traceId}}", enabled: true },
+        ],
+      }),
+      { traceId: "abc123" },
+    );
+    expect(out).toContain("'X-Trace: abc123'");
+  });
+
+  it("substitutes {{var}} placeholders in body and params", () => {
+    const out = exportCurl(
+      makeRequest({
+        method: "POST",
+        url: "https://api.example.com/u/{{id}}",
+        bodyType: "json",
+        body: '{"name":"{{name}}"}',
+        params: [{ id: "1", key: "ref", value: "{{ref}}", enabled: true }],
+      }),
+      { id: "42", name: "Ada", ref: "src" },
+    );
+    expect(out).toContain("'https://api.example.com/u/42?ref=src'");
+    expect(out).toContain(`'{"name":"Ada"}'`);
+    expect(out).not.toContain("{{");
+  });
+
+  it("substitutes {{var}} placeholders in auth values", () => {
+    const out = exportCurl(
+      makeRequest({
+        auth: { auth_type: "bearer", bearer_token: "{{token}}" },
+      }),
+      { token: "secret-jwt" },
+    );
+    expect(out).toContain("'Authorization: Bearer secret-jwt'");
+  });
+
+  it("leaves unknown placeholders as-is so the user can spot what's missing", () => {
+    const out = exportCurl(
+      makeRequest({ url: "https://{{host}}/u/{{id}}" }),
+      { host: "api.example.com" },
+    );
+    expect(out).toContain("https://api.example.com/u/{{id}}");
+  });
 });
 
 describe("parseCurl", () => {

@@ -1,34 +1,64 @@
 import type { HttpMethod, RequestItem, KeyValue } from "../types";
+import { substituteAll } from "./dynamicVars";
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
-export function exportCurl(request: RequestItem): string {
+/**
+ * Serialize a request as a `curl` invocation suitable for copy-paste.
+ *
+ * When `envVars` is provided, every `{{var}}` / `{{$dynamic}}` placeholder
+ * on the request — URL, headers, auth values, body, params — is resolved
+ * before being emitted. This matches what the user would actually see if
+ * they sent the request from the app, so the copied curl command is
+ * directly runnable.
+ *
+ * Pass `envVars = {}` (or omit it) to copy the raw, un-substituted request
+ * — useful for sharing a request template that someone else will fill in
+ * their own values for.
+ *
+ * Unknown placeholders are left intact (same behaviour as
+ * `substituteAll`); they survive into the curl output as `{{name}}` so the
+ * user can spot what's missing.
+ */
+export function exportCurl(
+  request: RequestItem,
+  envVars: Record<string, string> = {},
+): string {
+  const sub = (s: string): string =>
+    substituteAll(s, (k) => envVars[k]);
+
   const parts: string[] = ["curl"];
 
   if (request.method !== "GET") {
     parts.push(`-X ${request.method}`);
   }
 
-  parts.push(`'${request.url}'`);
+  const resolvedUrlBase = sub(request.url);
+  const urlPlaceholder = `'${resolvedUrlBase}'`;
+  parts.push(urlPlaceholder);
 
   // Headers
   const headers = request.headers.filter((h) => h.enabled && h.key);
   for (const h of headers) {
-    parts.push(`-H '${h.key}: ${h.value}'`);
+    parts.push(`-H '${sub(h.key)}: ${sub(h.value)}'`);
   }
 
   // Auth
   if (request.auth) {
     const auth = request.auth;
     if (auth.auth_type === "bearer" && auth.bearer_token) {
-      parts.push(`-H 'Authorization: Bearer ${auth.bearer_token}'`);
+      parts.push(`-H 'Authorization: Bearer ${sub(auth.bearer_token)}'`);
     } else if (auth.auth_type === "basic" && auth.basic_username) {
-      parts.push(`-u '${auth.basic_username}:${auth.basic_password || ""}'`);
+      parts.push(
+        `-u '${sub(auth.basic_username)}:${sub(auth.basic_password || "")}'`,
+      );
     } else if (auth.auth_type === "api_key" && auth.api_key_key) {
       if (auth.api_key_in === "header") {
-        parts.push(`-H '${auth.api_key_key}: ${auth.api_key_value || ""}'`);
+        parts.push(
+          `-H '${sub(auth.api_key_key)}: ${sub(auth.api_key_value || "")}'`,
+        );
       }
     }
   }
@@ -37,21 +67,27 @@ export function exportCurl(request: RequestItem): string {
   if (request.bodyType === "form-data") {
     const fields = request.formData.filter((f) => f.enabled && f.key);
     for (const f of fields) {
-      parts.push(`-F '${f.key}=${f.value}'`);
+      parts.push(`-F '${sub(f.key)}=${sub(f.value)}'`);
     }
   } else if (request.bodyType !== "none" && request.body) {
-    parts.push(`-d '${request.body.replace(/'/g, "'\\''")}'`);
+    parts.push(`-d '${sub(request.body).replace(/'/g, "'\\''")}'`);
   }
 
-  // Params
-  let url = request.url;
+  // Params — append after substitution so the *resolved* URL is what gets
+  // the query string. We update the placeholder we pushed above in place
+  // so the URL still appears in the same slot in the final command.
+  let url = resolvedUrlBase;
   const enabledParams = request.params.filter((p) => p.enabled && p.key);
   if (enabledParams.length > 0) {
-    const qs = enabledParams.map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join("&");
+    const qs = enabledParams
+      .map(
+        (p) =>
+          `${encodeURIComponent(sub(p.key))}=${encodeURIComponent(sub(p.value))}`,
+      )
+      .join("&");
     const sep = url.includes("?") ? "&" : "?";
     url = `${url}${sep}${qs}`;
-    // Replace the URL in parts
-    parts[parts.indexOf(`'${request.url}'`)] = `'${url}'`;
+    parts[parts.indexOf(urlPlaceholder)] = `'${url}'`;
   }
 
   return parts.join(" \\\n  ");

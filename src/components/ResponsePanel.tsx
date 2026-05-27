@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Check, ArrowUpRight, Search, X, Download, AlertTriangle, FileQuestion, GitCompare, ListTree, FileCode2, Filter } from "lucide-react";
+import { Copy, Check, ArrowUpRight, Search, X, Download, AlertTriangle, FileQuestion, GitCompare, ListTree, FileCode2, Filter, MoreHorizontal, Link2, Terminal, Archive, Variable } from "lucide-react";
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { JsonView, defaultStyles, darkStyles } from "react-json-view-lite";
@@ -9,6 +9,11 @@ import { useDarkMode } from "../utils/useDarkMode";
 import { useRequestStore } from "../store/useRequestStore";
 import { ResponseDiffModal } from "./ResponseDiffModal";
 import { evaluateJsonPath } from "../utils/jsonPath";
+import { resolveRequestUrl } from "../utils/resolveUrl";
+import { exportCurl } from "../utils/curl";
+import { buildHarLog } from "../utils/har";
+import { buildScopedVars } from "../utils/variableScope";
+import { SaveToVariableModal } from "./SaveToVariableModal";
 
 type ResponseTab = "body" | "headers" | "tests";
 
@@ -152,7 +157,17 @@ export function ResponsePanel() {
   // and surfaced as a small inline message rather than crashing.
   const [jsonPath, setJsonPath] = useState("");
   const [jsonPathOpen, setJsonPathOpen] = useState(false);
-  const { response, loading, error, activeRequest, testResults, scriptLogs, scriptError, responseHistory } = useRequestStore();
+  // “More actions” dropdown anchored to the kebab button. Toggled open
+  // from the button itself and closed by outside-click / Escape so it
+  // behaves like a native menu.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const [saveVariableOpen, setSaveVariableOpen] = useState(false);
+  // One-shot status banner shown briefly after a copy / save action so the
+  // user gets non-blocking visual feedback. Each entry is { kind, text };
+  // it auto-clears after 2 s via the timeout below.
+  const [actionFlash, setActionFlash] = useState<string | null>(null);
+  const { response, loading, error, activeRequest, testResults, scriptLogs, scriptError, responseHistory, environments, workspace, collections } = useRequestStore();
   const snapshots = activeRequest ? responseHistory[activeRequest.id] ?? [] : [];
   const canDiff = snapshots.length >= 2;
 
@@ -257,6 +272,98 @@ export function ResponsePanel() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  /** Full scope chain (global → collection → folder → environment) used
+   *  for URL / cURL / HAR exports. Mirrors what `requestPipeline` builds
+   *  at send time — minus transient script overrides, which are already
+   *  discarded by the time the user clicks Copy. Using the full chain
+   *  keeps the three response-panel copy actions in lock-step with the
+   *  request-panel "Copy as cURL" button, so a `{{var}}` defined at any
+   *  layer resolves consistently regardless of which copy entry point the
+   *  user used. */
+  const envVars = useMemo<Record<string, string>>(
+    () =>
+      activeRequest
+        ? buildScopedVars({
+            workspace,
+            collections,
+            environments,
+            request: activeRequest,
+          })
+        : {},
+    [workspace, collections, environments, activeRequest],
+  );
+
+  const flash = (msg: string) => {
+    setActionFlash(msg);
+  };
+
+  // Auto-clear the action flash banner after 2 s so it never lingers.
+  useEffect(() => {
+    if (!actionFlash) return;
+    const t = setTimeout(() => setActionFlash(null), 2000);
+    return () => clearTimeout(t);
+  }, [actionFlash]);
+
+  // Close the More menu on outside click / Escape so it behaves like a
+  // native menu.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node)
+      ) {
+        setMoreOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
+  const copyUrl = async () => {
+    if (!activeRequest) return;
+    const url = resolveRequestUrl(activeRequest, envVars);
+    await navigator.clipboard.writeText(url);
+    flash(t("response.copy_url"));
+    setMoreOpen(false);
+  };
+
+  const copyAsCurl = async () => {
+    if (!activeRequest) return;
+    // Pass envVars so {{var}} placeholders in the URL / headers / body /
+    // params are resolved against the active env — matches the behaviour
+    // of Copy URL / Copy as HAR, so all three exports produce something
+    // the user can immediately run / share.
+    await navigator.clipboard.writeText(exportCurl(activeRequest, envVars));
+    flash(t("response.copy_curl"));
+    setMoreOpen(false);
+  };
+
+  const copyAsHar = async () => {
+    if (!activeRequest || !response) return;
+    const finalUrl = resolveRequestUrl(activeRequest, envVars);
+    // Approximate start time: HAR requires a startedDateTime, and we don't
+    // record one. `Date.now() - response.time_ms` is the closest we can
+    // get without instrumenting the send pipeline.
+    const startedAt = Date.now() - response.time_ms;
+    const har = buildHarLog(activeRequest, response, finalUrl, startedAt);
+    await navigator.clipboard.writeText(JSON.stringify(har, null, 2));
+    flash(t("response.copy_har"));
+    setMoreOpen(false);
+  };
+
+  const openSaveToVariable = () => {
+    setMoreOpen(false);
+    setSaveVariableOpen(true);
   };
 
   const saveResponseToDisk = async () => {
@@ -413,8 +520,75 @@ export function ResponsePanel() {
           >
             {savedFlash ? <Check size={14} className="text-success" /> : <Download size={14} className="text-text-tertiary" />}
           </button>
+          {/* More-actions kebab menu: holds the secondary share/export
+              actions so we don't blow up the action bar with seven inline
+              buttons. The first three are clipboard exports; the fourth
+              opens the save-to-variable modal. */}
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${moreOpen ? "bg-accent/15" : "hover:bg-black/5"}`}
+              title={t("response.more_actions")}
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+            >
+              <MoreHorizontal size={14} className={moreOpen ? "text-accent" : "text-text-tertiary"} />
+            </button>
+            {moreOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 z-20 min-w-[200px] bg-surface rounded-apple-lg shadow-apple-lg border border-border-light overflow-hidden text-[12px]"
+              >
+                <button
+                  onClick={copyUrl}
+                  role="menuitem"
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-surface-secondary"
+                >
+                  <Link2 size={13} className="text-text-tertiary" />
+                  {t("response.copy_url")}
+                </button>
+                <button
+                  onClick={copyAsCurl}
+                  role="menuitem"
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-surface-secondary"
+                >
+                  <Terminal size={13} className="text-text-tertiary" />
+                  {t("response.copy_curl")}
+                </button>
+                <button
+                  onClick={copyAsHar}
+                  role="menuitem"
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-surface-secondary"
+                >
+                  <Archive size={13} className="text-text-tertiary" />
+                  {t("response.copy_har")}
+                </button>
+                <div className="border-t border-border-light" />
+                <button
+                  onClick={openSaveToVariable}
+                  role="menuitem"
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-surface-secondary"
+                >
+                  <Variable size={13} className="text-text-tertiary" />
+                  {t("response.save_to_variable")}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Non-blocking action flash: shows briefly after copy / save so the
+          user knows the clipboard / store mutation succeeded without an
+          extra modal. Auto-clears after 2 s via the effect above. */}
+      {actionFlash && (
+        <div className="px-4 pb-1.5">
+          <div className="inline-flex items-center gap-1.5 text-[11px] text-success bg-success/10 rounded-md px-2 py-1">
+            <Check size={11} />
+            {actionFlash}
+          </div>
+        </div>
+      )}
 
       {/* JSONPath bar */}
       {jsonPathOpen && activeTab === "body" && bodyIsJson && (
@@ -609,6 +783,23 @@ export function ResponsePanel() {
         <ResponseDiffModal
           snapshots={snapshots}
           onClose={() => setDiffOpen(false)}
+        />
+      )}
+      {saveVariableOpen && response && (
+        <SaveToVariableModal
+          response={response}
+          initialJsonPath={jsonPath}
+          onClose={() => setSaveVariableOpen(false)}
+          onSaved={({ envId, key }) => {
+            const envName =
+              environments.find((e) => e.id === envId)?.name ?? envId;
+            flash(
+              t("response.save_to_variable_done", {
+                env: envName,
+                key,
+              }),
+            );
+          }}
         />
       )}
     </div>

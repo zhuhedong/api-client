@@ -1,8 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, Loader2, AlertTriangle } from "lucide-react";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
+import { Check, Loader2, AlertTriangle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AuthConfig } from "../types";
+
+/** Shape of `DeviceCodeStartResult` returned by `oauth2_start_device_code`. */
+interface DeviceCodeStartResult {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string | null;
+  expires_in: number;
+  interval: number;
+}
 
 interface Props {
   value: AuthConfig | undefined;
@@ -236,6 +247,17 @@ function OAuth2Editor({
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchOk, setFetchOk] = useState(false);
+  // device_code flow: holds the user_code + verification_uri block while
+  // we wait for the user to approve on the verification page. `null` for
+  // all other grants (and for device_code before / after polling).
+  const [deviceInfo, setDeviceInfo] = useState<DeviceCodeStartResult | null>(
+    null,
+  );
+  // Set to true when the user clicks Cancel on the device_code block.
+  // The backend poll loop keeps running until its deadline, but we ignore
+  // its eventual result so the UI doesn't bounce back into a token state
+  // the user explicitly abandoned.
+  const cancelledRef = useRef(false);
   // Drive "expired" state off a tick that updates once a minute, instead of
   // calling Date.now() in render (which violates react-hooks purity and
   // produces non-deterministic renders).
@@ -264,7 +286,67 @@ function OAuth2Editor({
     setFetching(true);
     setFetchError(null);
     setFetchOk(false);
+    cancelledRef.current = false;
     try {
+      // device_code (RFC 8628) is a two-step flow with a polling tail:
+      //   1. POST to device-authorization endpoint → user_code + uri
+      //   2. show user_code/uri to the user (auto-open browser on the
+      //      complete URI if the provider supplied one)
+      //   3. poll the token endpoint until the user approves
+      if (grant === "device_code") {
+        const start = await invoke<DeviceCodeStartResult>(
+          "oauth2_start_device_code",
+          {
+            request: {
+              device_authorization_url:
+                value.oauth2_device_authorization_url || "",
+              client_id: value.oauth2_client_id || "",
+              client_secret: value.oauth2_client_secret || "",
+              scope: value.oauth2_scope || null,
+              client_auth: clientAuth,
+              insecure: false,
+            },
+          },
+        );
+        setDeviceInfo(start);
+        // Best-effort: try to launch the user's browser at the
+        // verification URL. If the shell plugin can't (Linux without
+        // xdg-open, missing capability, etc.) the user can still copy
+        // the URL from the panel and open it manually.
+        const browserUrl = start.verification_uri_complete || start.verification_uri;
+        try {
+          await openExternal(browserUrl);
+        } catch {
+          /* user can still copy/click manually */
+        }
+
+        const resp = await invoke<{
+          access_token: string;
+          expires_at: number | null;
+          refresh_token: string | null;
+        }>("oauth2_poll_device_token", {
+          request: {
+            token_url: value.oauth2_token_url || "",
+            client_id: value.oauth2_client_id || "",
+            client_secret: value.oauth2_client_secret || "",
+            client_auth: clientAuth,
+            device_code: start.device_code,
+            interval: start.interval,
+            expires_in: start.expires_in,
+            insecure: false,
+          },
+        });
+        if (cancelledRef.current) return;
+        onChange({
+          ...value,
+          oauth2_access_token: resp.access_token,
+          oauth2_token_expires_at: resp.expires_at ?? undefined,
+          oauth2_refresh_token: resp.refresh_token ?? value.oauth2_refresh_token,
+        });
+        setFetchOk(true);
+        return;
+      }
+
       // authorization_code is a two-step flow:
       //   1. open browser, await loopback redirect with the code
       //   2. exchange code + verifier for tokens
@@ -324,10 +406,21 @@ function OAuth2Editor({
       });
       setFetchOk(true);
     } catch (err) {
-      setFetchError(String(err));
+      if (!cancelledRef.current) {
+        setFetchError(String(err));
+      }
     } finally {
       setFetching(false);
+      setDeviceInfo(null);
     }
+  };
+
+  const cancelDeviceFlow = () => {
+    // The backend poll loop continues until its own deadline; we just
+    // hide the panel and ignore the eventual result via cancelledRef.
+    cancelledRef.current = true;
+    setDeviceInfo(null);
+    setFetching(false);
   };
 
   const refreshToken = async () => {
@@ -389,8 +482,28 @@ function OAuth2Editor({
           >
             {t("auth.oauth2_grant_password")}
           </button>
+          <button
+            onClick={() => onChange({ ...value, oauth2_grant_type: "device_code" })}
+            className={`segment ${grant === "device_code" ? "segment-active" : ""}`}
+          >
+            {t("auth.oauth2_grant_device_code")}
+          </button>
         </div>
       </div>
+
+      {grant === "device_code" && (
+        <div>
+          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_device_authorization_url")}</label>
+          <input
+            type="text"
+            value={value.oauth2_device_authorization_url || ""}
+            onChange={(e) => onChange({ ...value, oauth2_device_authorization_url: e.target.value })}
+            placeholder={t("auth.oauth2_device_authorization_url_placeholder")}
+            className="input-apple w-full font-mono text-[12px] mt-1"
+            spellCheck={false}
+          />
+        </div>
+      )}
 
       {grant === "authorization_code" && (
         <>
@@ -528,6 +641,75 @@ function OAuth2Editor({
             <>{t("auth.oauth2_fetch_token")}</>
           )}
         </button>
+
+        {deviceInfo && (
+          <div className="mt-3 p-3 rounded-md border border-border bg-surface-secondary space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                {t("auth.oauth2_device_user_code_label")}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(deviceInfo.user_code)}
+                className="text-[11px] text-accent hover:underline flex items-center gap-1"
+              >
+                <Copy size={11} />
+                {t("auth.oauth2_device_copy_code")}
+              </button>
+            </div>
+            <div className="font-mono text-[18px] tracking-[0.25em] text-text-primary select-all">
+              {deviceInfo.user_code}
+            </div>
+
+            <div className="flex items-baseline justify-between gap-2 pt-2">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                {t("auth.oauth2_device_verification_uri_label")}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(deviceInfo.verification_uri_complete || deviceInfo.verification_uri)}
+                  className="text-[11px] text-accent hover:underline flex items-center gap-1"
+                >
+                  <Copy size={11} />
+                  {t("auth.oauth2_device_copy_url")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openExternal(deviceInfo.verification_uri_complete || deviceInfo.verification_uri);
+                  }}
+                  className="text-[11px] text-accent hover:underline flex items-center gap-1"
+                >
+                  <ExternalLink size={11} />
+                  {t("auth.oauth2_device_open_browser")}
+                </button>
+              </div>
+            </div>
+            <div className="font-mono text-[12px] text-text-primary break-all select-all">
+              {deviceInfo.verification_uri}
+            </div>
+
+            <p className="text-[11px] text-text-secondary pt-1">{t("auth.oauth2_device_instructions")}</p>
+            <p className="text-[11px] text-text-tertiary">
+              {t("auth.oauth2_device_expires_in", { minutes: Math.max(1, Math.round(deviceInfo.expires_in / 60)) })}
+            </p>
+
+            <div className="flex items-center justify-between pt-2 border-t border-border-light">
+              <span className="text-[11px] text-text-secondary flex items-center gap-1.5">
+                <Loader2 size={11} className="animate-spin" />
+                {t("auth.oauth2_device_polling")}
+              </span>
+              <button
+                type="button"
+                onClick={cancelDeviceFlow}
+                className="text-[11px] text-text-secondary hover:text-text-primary hover:underline"
+              >
+                {t("auth.oauth2_device_cancel")}
+              </button>
+            </div>
+          </div>
+        )}
 
         {fetchError && (
           <div className="mt-2 flex items-start gap-1.5 text-[11px] text-error">

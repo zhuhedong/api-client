@@ -189,7 +189,11 @@ export function RequestPanel() {
         </div>
         <button
           onClick={() => {
-            const curl = exportCurl(activeRequest);
+            // `scopedVars` already flattens global / collection / folder /
+            // env layers (same layers `requestPipeline` uses at send time),
+            // so the copied curl matches what would actually fly across
+            // the wire when the user hits Send.
+            const curl = exportCurl(activeRequest, scopedVars);
             navigator.clipboard.writeText(curl);
             setCurlCopied(true);
             setTimeout(() => setCurlCopied(false), 2000);

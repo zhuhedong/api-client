@@ -362,6 +362,8 @@ PRs welcome. A few small ground rules:
 4. Backend code lives in `src-tauri/src/` — new Tauri commands go through `tauri::generate_handler!` in `lib.rs`.
 5. UI strings should be added to **both** `src/i18n/locales/en.json` and `src/i18n/locales/zh.json`.
 
+For deeper conventions, see [`CONTRIBUTING.md`](./CONTRIBUTING.md). Notable changes are tracked in [`CHANGELOG.md`](./CHANGELOG.md); the architecture overview lives at [`docs/architecture.md`](./docs/architecture.md); security disclosures go through [`SECURITY.md`](./SECURITY.md).
+
 ---
 
 ## License

@@ -803,6 +803,29 @@ async fn oauth2_start_authorization_code(
     .await
 }
 
+/// First leg of the RFC 8628 Device Authorization Grant: POST to the
+/// device-authorization endpoint and return the user-facing code +
+/// verification URL. The frontend shows these to the user and then
+/// calls `oauth2_poll_device_token` to await approval.
+#[tauri::command]
+async fn oauth2_start_device_code(
+    request: oauth2::DeviceCodeStartRequest,
+) -> Result<oauth2::DeviceCodeStartResult, String> {
+    oauth2::start_device_code(request).await
+}
+
+/// Second leg of the device grant: poll the token endpoint until the user
+/// approves on the verification page (success), denies (error), or the
+/// device_code expires (error). May run for several minutes; the frontend
+/// should show progress and offer a cancel button (the IPC future being
+/// dropped by `cancel_request` will tear the loop down).
+#[tauri::command]
+async fn oauth2_poll_device_token(
+    request: oauth2::DeviceCodePollRequest,
+) -> Result<oauth2::OAuth2FetchResponse, String> {
+    oauth2::poll_device_token(request).await
+}
+
 /// Write a response body to disk. Two modes:
 ///
 /// 1. **Truncated body**: when the response was too big to send over IPC in
@@ -890,6 +913,8 @@ pub fn run() {
             sse_close,
             oauth2_fetch_token,
             oauth2_start_authorization_code,
+            oauth2_start_device_code,
+            oauth2_poll_device_token,
             // History
             commands::save_history,
             commands::get_history,

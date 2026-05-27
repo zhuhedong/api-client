@@ -362,6 +362,8 @@ npm run test:e2e                   # Playwright 端到端（可选）
 4. 后端在 `src-tauri/src/` —— 新的 Tauri 命令通过 `lib.rs` 里的 `tauri::generate_handler!` 注册。
 5. 任何新的 UI 文案要 **同时** 加进 `src/i18n/locales/en.json` 和 `src/i18n/locales/zh.json`。
 
+更细的约定见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)；版本变更见 [`CHANGELOG.md`](./CHANGELOG.md)；架构概览见 [`docs/architecture.md`](./docs/architecture.md)；安全漏洞披露走 [`SECURITY.md`](./SECURITY.md)。
+
 ---
 
 ## 协议

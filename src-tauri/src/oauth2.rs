@@ -8,6 +8,13 @@
 //                            redirect listener on 127.0.0.1, and exchanges
 //                            the returned `code` for tokens
 //   * `refresh_token`     — exchange a refresh_token for a new access_token
+//   * `device_code`       — RFC 8628 Device Authorization Grant. Two-step:
+//                            (a) POST to the device-authorization endpoint
+//                                to receive a `user_code` + `verification_uri`
+//                                that the user enters on a second device,
+//                            (b) poll the token endpoint with the
+//                                `device_code` until the user approves or
+//                                the code expires.
 
 use base64::Engine;
 use rand::RngCore;
@@ -114,6 +121,70 @@ pub struct AuthorizationCodeResult {
     pub code_verifier: String,
     /// `state` parameter from the redirect — caller should verify it matches.
     pub state: String,
+}
+
+/// Request body for `start_device_code`. Hits the provider's
+/// device-authorization endpoint per RFC 8628 §3.1.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeviceCodeStartRequest {
+    /// e.g. `https://github.com/login/device/code` or
+    /// `https://oauth2.googleapis.com/device/code`.
+    pub device_authorization_url: String,
+    pub client_id: String,
+    /// Required only for confidential clients. Most provider device-code
+    /// implementations target public clients and accept an empty secret.
+    #[serde(default)]
+    pub client_secret: String,
+    pub scope: Option<String>,
+    /// "basic" or "body". Defaults to "body" — many device-grant providers
+    /// expect client credentials in the form body, not the Authorization
+    /// header. Override per provider if needed.
+    pub client_auth: Option<String>,
+    #[serde(default)]
+    pub insecure: bool,
+}
+
+/// Returned by `start_device_code`. The frontend should show `user_code`
+/// and `verification_uri` to the user (auto-open `verification_uri_complete`
+/// in the browser when available, falling back to `verification_uri`), then
+/// call `poll_device_token` to await approval.
+#[derive(Debug, Serialize, Clone)]
+pub struct DeviceCodeStartResult {
+    /// Opaque code we send back to the token endpoint while polling.
+    pub device_code: String,
+    /// Short, user-friendly code (e.g. `WDJB-MJHT`) the user types into
+    /// the verification page.
+    pub user_code: String,
+    /// URL the user navigates to on a second device (or the same browser).
+    pub verification_uri: String,
+    /// Optional: URL with `user_code` pre-filled (RFC 8628 §3.3.1).
+    /// Providers like GitHub include this so we can deep-link without
+    /// asking the user to copy the code.
+    pub verification_uri_complete: Option<String>,
+    /// Total time before the device_code expires (seconds).
+    pub expires_in: i64,
+    /// Minimum interval between polls (seconds).
+    pub interval: i64,
+}
+
+/// Request body for `poll_device_token`. Loops until the user approves or
+/// the device_code expires.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeviceCodePollRequest {
+    pub token_url: String,
+    pub client_id: String,
+    #[serde(default)]
+    pub client_secret: String,
+    pub client_auth: Option<String>,
+    pub device_code: String,
+    /// Initial polling interval in seconds (from `DeviceCodeStartResult`).
+    /// We may bump this on `slow_down` per RFC 8628 §3.5.
+    pub interval: i64,
+    /// Total polling budget in seconds (from `DeviceCodeStartResult`).
+    /// Once we've polled this long, we give up with `expired_token`.
+    pub expires_in: i64,
+    #[serde(default)]
+    pub insecure: bool,
 }
 
 /// Generate a PKCE code_verifier (RFC 7636 §4.1): 32 random bytes, base64url-
@@ -278,6 +349,27 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Truncate an arbitrary text body so it's safe to embed in an error
+/// message. Three constraints:
+///   * Never panic on multi-byte UTF-8 — `&s[..n]` panics if `n` lands
+///     inside a code point, which happens easily with localized provider
+///     errors (CJK, accented Latin, emoji). We walk back to the nearest
+///     char boundary instead.
+///   * Keep the message size bounded so a malicious or runaway provider
+///     can't push megabytes of HTML into a Rust panic / log line.
+///   * Preserve any short body verbatim so unit-test assertions and the
+///     UI's "everything fits, here's the JSON" path stay simple.
+fn truncate_for_error_snippet(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &s[..end])
+}
+
 /// URL-encode a single query value. Conservative; allows only unreserved
 /// characters and percent-encodes the rest. Used for building the
 /// authorization endpoint URL.
@@ -373,6 +465,277 @@ where
         code_verifier,
         state,
     })
+}
+
+/// Start the Device Authorization Grant flow (RFC 8628 §3.1–§3.2).
+/// POST `client_id` (+ optional `scope`) to the device-authorization
+/// endpoint and parse the JSON response into `DeviceCodeStartResult`.
+///
+/// We default `client_auth` to "body" because most device-grant providers
+/// (GitHub, Google) target public clients and either ignore or reject the
+/// Authorization header on this endpoint.
+pub async fn start_device_code(req: DeviceCodeStartRequest) -> Result<DeviceCodeStartResult, String> {
+    if req.device_authorization_url.trim().is_empty() {
+        return Err("Device authorization URL is required".to_string());
+    }
+    if req.client_id.trim().is_empty() {
+        return Err("Client ID is required".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(req.insecure)
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let mut form: HashMap<&str, &str> = HashMap::new();
+    if let Some(s) = req.scope.as_deref() {
+        if !s.is_empty() {
+            form.insert("scope", s);
+        }
+    }
+
+    let client_auth = req.client_auth.as_deref().unwrap_or("body");
+    let has_secret = !req.client_secret.is_empty();
+    let mut builder = client.post(&req.device_authorization_url);
+    match client_auth {
+        "basic" if has_secret => {
+            builder = builder.basic_auth(&req.client_id, Some(&req.client_secret));
+        }
+        "basic" => {
+            form.insert("client_id", &req.client_id);
+        }
+        "body" => {
+            form.insert("client_id", &req.client_id);
+            if has_secret {
+                form.insert("client_secret", &req.client_secret);
+            }
+        }
+        other => return Err(format!("Unsupported client_auth: {}", other)),
+    }
+
+    builder = builder.header("Accept", "application/json").form(&form);
+
+    let resp = builder
+        .send()
+        .await
+        .map_err(|e| format!("Device authorization request failed: {}", e))?;
+
+    let status = resp.status();
+    let body_text = resp
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read device authorization response body: {}", e))?;
+
+    if !status.is_success() {
+        let snippet = truncate_for_error_snippet(&body_text, 500);
+        return Err(format!(
+            "Device authorization endpoint returned {}: {}",
+            status, snippet
+        ));
+    }
+
+    // RFC 8628 §3.2 shape (only the fields we care about; provider extras
+    // are ignored). `interval` and `expires_in` are optional in the spec —
+    // fall back to the RFC-recommended defaults when omitted.
+    #[derive(Debug, Deserialize)]
+    struct DeviceAuthResponse {
+        device_code: String,
+        user_code: String,
+        verification_uri: Option<String>,
+        /// Google historically used `verification_url` instead of
+        /// `verification_uri`. Accept either; prefer the RFC spelling.
+        #[serde(default)]
+        verification_url: Option<String>,
+        #[serde(default)]
+        verification_uri_complete: Option<String>,
+        #[serde(default)]
+        expires_in: Option<i64>,
+        #[serde(default)]
+        interval: Option<i64>,
+    }
+
+    let parsed: DeviceAuthResponse = serde_json::from_str(&body_text).map_err(|e| {
+        format!(
+            "Failed to parse device authorization response: {} (body: {})",
+            e, body_text
+        )
+    })?;
+
+    let verification_uri = parsed
+        .verification_uri
+        .or(parsed.verification_url)
+        .ok_or_else(|| {
+            format!(
+                "Device authorization response missing verification_uri (body: {})",
+                body_text
+            )
+        })?;
+
+    Ok(DeviceCodeStartResult {
+        device_code: parsed.device_code,
+        user_code: parsed.user_code,
+        verification_uri,
+        verification_uri_complete: parsed.verification_uri_complete,
+        // RFC 8628 §3.2: clients SHOULD default `interval` to 5s and
+        // `expires_in` to whatever the provider tells them. If neither
+        // shows up, 10 minutes is a safe upper bound.
+        expires_in: parsed.expires_in.unwrap_or(600).max(60),
+        interval: parsed.interval.unwrap_or(5).max(1),
+    })
+}
+
+/// RFC 8628 §3.4–§3.5 token polling. Repeatedly POST
+/// `grant_type=urn:ietf:params:oauth:grant-type:device_code` to the token
+/// endpoint until the user approves (token returned), the user denies
+/// (`access_denied`), or the device_code expires (`expired_token` /
+/// deadline reached).
+///
+/// `interval` is the minimum delay between polls. `slow_down` responses
+/// bump the interval by 5s per spec.
+pub async fn poll_device_token(
+    req: DeviceCodePollRequest,
+) -> Result<OAuth2FetchResponse, String> {
+    if req.token_url.trim().is_empty() {
+        return Err("Token URL is required".to_string());
+    }
+    if req.client_id.trim().is_empty() {
+        return Err("Client ID is required".to_string());
+    }
+    if req.device_code.trim().is_empty() {
+        return Err("Device code is required".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(req.insecure)
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let mut interval = req.interval.max(1);
+    let deadline = tokio::time::Instant::now()
+        + Duration::from_secs(req.expires_in.max(30) as u64);
+
+    let client_auth = req.client_auth.as_deref().unwrap_or("body");
+    let has_secret = !req.client_secret.is_empty();
+
+    loop {
+        if tokio::time::Instant::now() >= deadline {
+            return Err(
+                "Device authorization timed out before the user approved.".to_string(),
+            );
+        }
+
+        // Hold the form values in local strings so the &str inserts into
+        // the form HashMap stay alive for the duration of the request.
+        let device_code = req.device_code.clone();
+        let client_id = req.client_id.clone();
+        let client_secret = req.client_secret.clone();
+
+        let mut form: HashMap<&str, &str> = HashMap::new();
+        form.insert(
+            "grant_type",
+            "urn:ietf:params:oauth:grant-type:device_code",
+        );
+        form.insert("device_code", &device_code);
+
+        let mut builder = client.post(&req.token_url);
+        match client_auth {
+            "basic" if has_secret => {
+                builder = builder.basic_auth(&client_id, Some(&client_secret));
+            }
+            "basic" => {
+                form.insert("client_id", &client_id);
+            }
+            "body" => {
+                form.insert("client_id", &client_id);
+                if has_secret {
+                    form.insert("client_secret", &client_secret);
+                }
+            }
+            other => return Err(format!("Unsupported client_auth: {}", other)),
+        }
+        builder = builder.header("Accept", "application/json").form(&form);
+
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| format!("Device token poll failed: {}", e))?;
+
+        let status = resp.status();
+        let body_text = resp
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read device token poll body: {}", e))?;
+
+        if status.is_success() {
+            let parsed: TokenResponse =
+                serde_json::from_str(&body_text).map_err(|e| {
+                    format!(
+                        "Failed to parse token response: {} (body: {})",
+                        e, body_text
+                    )
+                })?;
+            let expires_at = parsed.expires_in.map(|seconds| {
+                let now = chrono::Utc::now().timestamp_millis();
+                now + (seconds.max(60) - 30) * 1000
+            });
+            return Ok(OAuth2FetchResponse {
+                access_token: parsed.access_token,
+                expires_at,
+                refresh_token: parsed.refresh_token,
+            });
+        }
+
+        // Per RFC 8628 §3.5, the body is JSON with `error` (and optional
+        // `error_description`) on every non-success response. We branch
+        // on the error code rather than the HTTP status: providers vary
+        // between 400/403 for the polling-in-progress states.
+        #[derive(Debug, Deserialize)]
+        struct PollError {
+            error: String,
+            #[serde(default)]
+            error_description: Option<String>,
+        }
+        // Take ownership of the parsed struct (when present) so we can
+        // move out of its fields in the `Some(other)` arm below.
+        let parsed: Option<PollError> = serde_json::from_str(&body_text).ok();
+        match parsed.as_ref().map(|p| p.error.as_str()) {
+            Some("authorization_pending") => {
+                tokio::time::sleep(Duration::from_secs(interval as u64)).await;
+                continue;
+            }
+            Some("slow_down") => {
+                // §3.5: client MUST increase its polling interval by 5s.
+                interval = interval.saturating_add(5);
+                tokio::time::sleep(Duration::from_secs(interval as u64)).await;
+                continue;
+            }
+            Some("access_denied") => {
+                return Err("Authorization was denied by the user.".to_string());
+            }
+            Some("expired_token") => {
+                return Err(
+                    "Device code expired before the user approved.".to_string(),
+                );
+            }
+            Some(other) => {
+                let other = other.to_string();
+                let desc = parsed
+                    .and_then(|p| p.error_description)
+                    .map(|s| format!(": {}", s))
+                    .unwrap_or_default();
+                return Err(format!("Device token poll failed ({}{})", other, desc));
+            }
+            None => {
+                let snippet = truncate_for_error_snippet(&body_text, 500);
+                return Err(format!(
+                    "Token endpoint returned {} during device polling: {}",
+                    status, snippet
+                ));
+            }
+        }
+    }
 }
 
 pub async fn fetch_token(req: OAuth2FetchRequest) -> Result<OAuth2FetchResponse, String> {
@@ -486,11 +849,7 @@ pub async fn fetch_token(req: OAuth2FetchRequest) -> Result<OAuth2FetchResponse,
     if !status.is_success() {
         // Many providers return JSON {"error": "...", "error_description": "..."}
         // on failure. Surface that verbatim if present, otherwise raw body.
-        let snippet = if body_text.len() > 500 {
-            format!("{}…", &body_text[..500])
-        } else {
-            body_text.clone()
-        };
+        let snippet = truncate_for_error_snippet(&body_text, 500);
         return Err(format!("Token endpoint returned {}: {}", status, snippet));
     }
 
@@ -514,6 +873,54 @@ pub async fn fetch_token(req: OAuth2FetchRequest) -> Result<OAuth2FetchResponse,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncate_for_error_snippet_preserves_short_ascii() {
+        assert_eq!(truncate_for_error_snippet("hello", 500), "hello");
+        assert_eq!(truncate_for_error_snippet("", 500), "");
+    }
+
+    #[test]
+    fn truncate_for_error_snippet_bounds_long_ascii_with_ellipsis() {
+        let long = "a".repeat(1000);
+        let out = truncate_for_error_snippet(&long, 500);
+        // 500 bytes of 'a' + the single-codepoint ellipsis.
+        assert_eq!(out.len(), 500 + '…'.len_utf8());
+        assert!(out.ends_with('…'));
+    }
+
+    #[test]
+    fn truncate_for_error_snippet_does_not_panic_on_multibyte_boundary() {
+        // 200 copies of a 3-byte CJK character (600 bytes total). A naive
+        // `&s[..500]` would land at byte 500, which is inside the 167th
+        // character (bytes 498..501) and panic. The helper must back up
+        // to byte 498 (the nearest char boundary).
+        let s: String = std::iter::repeat('哈').take(200).collect();
+        assert_eq!(s.len(), 600);
+        let out = truncate_for_error_snippet(&s, 500);
+        // Sanity-check: the truncated body must be valid UTF-8 (already
+        // implied by Rust's `&str`, but we verify the boundary handling
+        // by confirming the byte length matches 498 + ellipsis).
+        assert_eq!(out.len(), 498 + '…'.len_utf8());
+        assert!(out.ends_with('…'));
+        // Every char in the body must be the original CJK char (no
+        // partial code point smuggled in).
+        for c in out.chars().take_while(|c| *c != '…') {
+            assert_eq!(c, '哈');
+        }
+    }
+
+    #[test]
+    fn truncate_for_error_snippet_handles_emoji_at_boundary() {
+        // 🌍 is 4 bytes; place one straddling byte 500.
+        let mut s = "x".repeat(498);
+        s.push('🌍');
+        s.push_str("yz");
+        // Total = 498 + 4 + 2 = 504 bytes.
+        let out = truncate_for_error_snippet(&s, 500);
+        // Must back up to byte 498 (before the emoji).
+        assert_eq!(out.len(), 498 + '…'.len_utf8());
+    }
 
     #[test]
     fn code_verifier_is_43_chars_url_safe() {
@@ -631,5 +1038,110 @@ mod tests {
             .block_on(fetch_token(req))
             .unwrap_err();
         assert!(err.contains("Refresh token is required"), "got {}", err);
+    }
+
+    #[test]
+    fn start_device_code_rejects_missing_inputs() {
+        // Missing device_authorization_url
+        let req = DeviceCodeStartRequest {
+            device_authorization_url: String::new(),
+            client_id: "cid".into(),
+            client_secret: String::new(),
+            scope: None,
+            client_auth: None,
+            insecure: false,
+        };
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(start_device_code(req))
+            .unwrap_err();
+        assert!(
+            err.contains("Device authorization URL is required"),
+            "got {}",
+            err
+        );
+
+        // Missing client_id
+        let req = DeviceCodeStartRequest {
+            device_authorization_url: "https://example.test/device".into(),
+            client_id: String::new(),
+            client_secret: String::new(),
+            scope: None,
+            client_auth: None,
+            insecure: false,
+        };
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(start_device_code(req))
+            .unwrap_err();
+        assert!(err.contains("Client ID is required"), "got {}", err);
+    }
+
+    #[test]
+    fn poll_device_token_rejects_missing_inputs() {
+        // Missing token_url
+        let req = DeviceCodePollRequest {
+            token_url: String::new(),
+            client_id: "cid".into(),
+            client_secret: String::new(),
+            client_auth: None,
+            device_code: "dc".into(),
+            interval: 5,
+            expires_in: 600,
+            insecure: false,
+        };
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(poll_device_token(req))
+            .unwrap_err();
+        assert!(err.contains("Token URL is required"), "got {}", err);
+
+        // Missing device_code
+        let req = DeviceCodePollRequest {
+            token_url: "https://example.test/token".into(),
+            client_id: "cid".into(),
+            client_secret: String::new(),
+            client_auth: None,
+            device_code: String::new(),
+            interval: 5,
+            expires_in: 600,
+            insecure: false,
+        };
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(poll_device_token(req))
+            .unwrap_err();
+        assert!(err.contains("Device code is required"), "got {}", err);
+    }
+
+    #[test]
+    fn poll_device_token_does_not_hang_when_token_endpoint_is_unreachable() {
+        // Smoke test: point the poll loop at an unreachable port. Whatever
+        // error it returns (immediate connection-refused, or the deadline
+        // firing inside the loop), the helper must surface it as Err
+        // rather than spinning indefinitely. We bound the test on a 10s
+        // wall clock so a regression here shows up as a clear hang.
+        let req = DeviceCodePollRequest {
+            // Port 1 is reserved and effectively guaranteed to refuse
+            // connections in CI environments.
+            token_url: "http://127.0.0.1:1/token".into(),
+            client_id: "cid".into(),
+            client_secret: String::new(),
+            client_auth: None,
+            device_code: "dc".into(),
+            interval: 5,
+            expires_in: 0, // will get clamped to a 30s deadline internally
+            insecure: false,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async {
+            tokio::time::timeout(Duration::from_secs(10), poll_device_token(req)).await
+        });
+        let outer = result.expect("poll_device_token hung past 10s");
+        // We accept any Err — connection refused, dns error, etc. The
+        // failure mode we're guarding against is the function silently
+        // succeeding (impossible without a real token endpoint) or
+        // hanging past the wall clock.
+        assert!(outer.is_err(), "expected an error from unreachable endpoint");
     }
 }

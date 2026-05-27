@@ -129,3 +129,64 @@ jobs:
             playwright-report
             test-results
           retention-days: 7
+
+  security:
+    name: Security audit (cargo audit / npm audit)
+    runs-on: ubuntu-latest
+    # Security scans should never block a feature PR by themselves — a new
+    # CVE in a transitive dep can land mid-flight without any change on our
+    # side. We still want a visible signal, so the job runs on every PR but
+    # never marks the run red: failures show up as ⚠️ warnings instead.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Rust side ------------------------------------------------------
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo-audit binary
+        id: cache-cargo-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-v0.21
+
+      - name: Install cargo-audit
+        if: steps.cache-cargo-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
+
+      - name: Install cargo-audit ignore list
+        # `cargo-audit` only reads `~/.cargo/audit.toml` (no project-local
+        # config path is supported). We keep the canonical file inside
+        # `src-tauri/` so it lives near the code and contributors can find
+        # it; this step copies it into the cargo-home location before the
+        # scan. See `src-tauri/audit.toml` for the rationale per ignored ID.
+        run: |
+          mkdir -p ~/.cargo
+          cp src-tauri/audit.toml ~/.cargo/audit.toml
+
+      - name: cargo audit
+        working-directory: src-tauri
+        # `--deny warnings` turns unmaintained / yanked notices into hard
+        # failures too. Advisories we can't act on (transitive deps deep
+        # in the Tauri Linux WebView stack) are listed in
+        # `src-tauri/audit.toml` with a comment per entry; remove them
+        # when Tauri / wry bumps and drops the affected crate.
+        run: cargo audit --deny warnings
+
+      # ---- JavaScript side ------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (production deps, high+ severity)
+        # Devtime deps (vite, eslint, playwright, …) frequently carry
+        # advisories that don't apply to a published Tauri app, so we
+        # restrict to runtime deps and ignore moderate/low signal.
+        run: npm audit --omit=dev --audit-level=high

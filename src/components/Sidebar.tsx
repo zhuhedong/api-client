@@ -40,7 +40,7 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { MockServerPanel } from "./MockServerPanel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CollectionTreeView } from "./CollectionTree";
-import { applyTheme } from "../utils/theme";
+import { setThemeMode } from "../utils/theme";
 import { useDarkMode } from "../utils/useDarkMode";
 
 /** Heuristic format sniffers used by `handleImportFile`. */
@@ -111,7 +111,10 @@ export function Sidebar() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const toggleDark = () => {
-    applyTheme(!dark);
+    // Toggle promotes the choice to an explicit mode (so the user's intent
+    // beats their OS setting), which the Settings panel's "Theme" dropdown
+    // can later flip back to "system" if they want.
+    setThemeMode(dark ? "light" : "dark");
   };
 
   // Close the environment dropdown when clicking outside of it

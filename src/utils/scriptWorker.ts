@@ -8,20 +8,38 @@
  *  - Postman-flavoured `pm.*` API surface so existing Postman tests/scripts
  *    can be copy-pasted with minimal edits.
  *
+ * pm.* surface implemented:
+ *  - pm.request, pm.response
+ *  - pm.environment, pm.globals, pm.collectionVariables, pm.variables
+ *    (CRUD: get/set/unset/has/toObject)
+ *  - pm.iterationData (read-only: get/has/toObject)
+ *  - pm.sendRequest(req, cb?) → returns a Promise + invokes the optional
+ *    Postman-style `(err, res)` callback. Honoured both as
+ *    `pm.sendRequest("https://…", cb)` and as
+ *    `pm.sendRequest({url, method, header, body}, cb)`. Awaitable.
+ *  - pm.expect(actual).to.{equal,eql,include,match,have.status,have.property,
+ *    have.lengthOf, be.{ok,true,false,null,undefined,a,an,empty},
+ *    above,below,greaterThan,lessThan,deep.equal}
+ *  - pm.test(name, fn) — collects pass/fail into `out.tests`.
+ *
  * Limitations (intentional, documented for users):
- *  - No `fetch`/`XMLHttpRequest` (Worker has these but we don't expose them
- *    on `pm`; the user can still call them directly via globals — that's
- *    their choice and stays in-worker).
+ *  - No `fetch`/`XMLHttpRequest` exposed via `pm`; use `pm.sendRequest` so
+ *    requests go through the same backend (auth, cookies, history, redirect
+ *    policy) as a regular Send.
  *  - No filesystem / Tauri access.
  *  - `setTimeout` exists in the Worker but the runner's deadline will kill
  *    the worker anyway.
  *
- * The protocol is one message in, one message out:
- *  IN:  { kind: "pre" | "test", source, context }
- *  OUT: { ok, error?, environment, variables, tests, logs }
+ * Protocol — tagged messages in both directions:
+ *  IN  init:               { type: "init",              kind, source, context }
+ *  OUT sendRequest:        { type: "sendRequest",       id, payload }
+ *  IN  sendRequestResult:  { type: "sendRequestResult", id, response?, error? }
+ *  OUT done:               { type: "done", ok, error?, environment, globals,
+ *                           collectionVariables, variables, tests, logs }
  */
 
-interface WorkerInMessage {
+interface WorkerInitMessage {
+  type: "init";
   kind: "pre" | "test";
   source: string;
   context: {
@@ -41,9 +59,33 @@ interface WorkerInMessage {
       sizeBytes: number;
     };
     environment: Record<string, string>;
+    globals: Record<string, string>;
+    collectionVariables: Record<string, string>;
     variables: Record<string, string>;
+    iterationData: Record<string, string>;
   };
 }
+
+interface SendRequestResultMessage {
+  type: "sendRequestResult";
+  id: number;
+  /** Backend response on success. The shape mirrors `ResponseData` on the
+   *  Rust side so user scripts can read it with the same field names they
+   *  see on `pm.response`. */
+  response?: {
+    status: number;
+    status_text: string;
+    headers: Record<string, string>;
+    body: string;
+    body_encoding: "text" | "base64";
+    body_truncated?: boolean;
+    time_ms: number;
+    size_bytes: number;
+  };
+  error?: string;
+}
+
+type WorkerInMessage = WorkerInitMessage | SendRequestResultMessage;
 
 interface TestResult {
   name: string;
@@ -56,145 +98,129 @@ interface ScriptLog {
   args: string[];
 }
 
-interface WorkerOutMessage {
+interface WorkerDoneMessage {
+  type: "done";
   ok: boolean;
   error?: string;
   environment: Record<string, string>;
+  globals: Record<string, string>;
+  collectionVariables: Record<string, string>;
   variables: Record<string, string>;
   tests: TestResult[];
   logs: ScriptLog[];
 }
 
+/** Outbound request the worker would like the main thread to perform. The
+ *  shape mirrors Postman's `pm.sendRequest` argument so existing scripts
+ *  port over directly. Either a bare URL string or an object. */
+interface SendRequestPayload {
+  url: string;
+  method?: string;
+  /** Postman-style `header: { "X-Foo": "bar" }` or `header: [{key, value}]`.
+   *  We normalize to a flat array of {key, value} on the way out. */
+  headers?: { key: string; value: string }[];
+  /** Body. Plain string for JSON / text; `null` for none. */
+  body?: string | null;
+}
+
+interface SendRequestMessage {
+  type: "sendRequest";
+  id: number;
+  payload: SendRequestPayload;
+}
+
 // ---- Sandbox `pm` API factory ------------------------------------------------
+//
+// The actual chain / scope wrappers live in `./scriptApi` (pure module, no
+// Worker globals) so unit tests can import and exercise them in Node.
+// `scriptWorker.ts` itself can't be loaded in a non-Worker environment
+// because of the `self.onmessage` assignment at the bottom.
 
-function buildPm(msg: WorkerInMessage, out: WorkerOutMessage) {
-  const env = { ...msg.context.environment };
-  const vars = { ...msg.context.variables };
+import {
+  makeExpect,
+  readonlyScopeApi,
+  scopeApi,
+} from "./scriptApi";
 
-  const expect = (actual: unknown) => {
-    const chain = {
-      to: {} as Record<string, unknown>,
-    };
-    // `.to.equal(x)` — strict equality.
-    chain.to.equal = (expected: unknown) => {
-      if (actual !== expected) {
-        throw new Error(`expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`);
-      }
-    };
-    // `.to.eql(x)` — deep equality via JSON canonicalization.
-    chain.to.eql = (expected: unknown) => {
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-        throw new Error(`expected ${JSON.stringify(actual)} to deeply equal ${JSON.stringify(expected)}`);
-      }
-    };
-    // `.to.have.status(n)` — Postman style on a response.
-    chain.to.have = {
-      status: (code: number) => {
-        const r = actual as { status?: number };
-        if (!r || r.status !== code) {
-          throw new Error(`expected status ${code}, got ${r?.status}`);
+interface ScopeMap {
+  env: Record<string, string>;
+  globals: Record<string, string>;
+  collectionVariables: Record<string, string>;
+  vars: Record<string, string>;
+}
+
+
+/** Map of in-flight `pm.sendRequest` calls to the resolvers their Promises
+ *  are waiting on. Keyed by the integer id we sent to the main thread. */
+const pending: Map<
+  number,
+  (msg: SendRequestResultMessage) => void
+> = new Map();
+let nextRequestId = 1;
+
+function buildPm(
+  msg: WorkerInitMessage,
+  out: WorkerDoneMessage,
+  scope: ScopeMap,
+) {
+  const expect = makeExpect();
+
+  /**
+   * `pm.sendRequest` — fire a request through the main-thread Tauri
+   * backend and resolve with the response. Honoured both as a positional
+   * callback (`pm.sendRequest(req, (err, res) => …)`) and as an awaitable
+   * Promise (`const res = await pm.sendRequest(req);`). Errors surface in
+   * the callback's first arg and as a Promise rejection.
+   */
+  const sendRequest = (
+    reqOrUrl: string | (SendRequestPayload & { header?: Record<string, string> | { key: string; value: string }[] }),
+    cb?: (err: Error | null, res?: unknown) => void,
+  ): Promise<unknown> => {
+    let payload: SendRequestPayload;
+    if (typeof reqOrUrl === "string") {
+      payload = { url: reqOrUrl };
+    } else {
+      // Normalize headers. Postman uses `header` (singular); Postman's UI
+      // emits either a `{name: value}` object or an array of
+      // `{key, value}`. We accept both and ship a canonical array.
+      const h = reqOrUrl.headers ?? normalizeHeader(reqOrUrl.header);
+      payload = {
+        url: reqOrUrl.url,
+        method: reqOrUrl.method,
+        headers: h,
+        body: reqOrUrl.body ?? null,
+      };
+    }
+    const id = nextRequestId++;
+    const outbound: SendRequestMessage = { type: "sendRequest", id, payload };
+    return new Promise<unknown>((resolve, reject) => {
+      pending.set(id, (result) => {
+        pending.delete(id);
+        if (result.error) {
+          const err = new Error(result.error);
+          if (cb) cb(err);
+          reject(err);
+          return;
         }
-      },
-      property: (key: string) => {
-        if (!actual || typeof actual !== "object" || !(key in (actual as object))) {
-          throw new Error(`expected object to have property "${key}"`);
-        }
-      },
-    };
-    // `.to.include(x)` — substring or member.
-    chain.to.include = (expected: unknown) => {
-      if (typeof actual === "string" && typeof expected === "string") {
-        if (!actual.includes(expected)) {
-          throw new Error(`expected "${actual}" to include "${expected}"`);
-        }
-        return;
-      }
-      if (Array.isArray(actual)) {
-        if (!actual.includes(expected)) {
-          throw new Error(`expected array to include ${JSON.stringify(expected)}`);
-        }
-        return;
-      }
-      throw new Error("include() only supports strings and arrays");
-    };
-    // `.to.be.ok` / `.to.be.true` / `.to.be.false` / `.to.be.null` need to be
-    // PROPERTY GETTERS that throw on access — matching Chai/Postman semantics.
-    // Defining them as methods (`ok: () => {...}`) would let
-    // `expect(null).to.be.ok` silently pass because the function reference is
-    // truthy. `to.be.a(type)` / `to.be.an(type)` stay as methods (they take an
-    // argument).
-    const be: Record<string, unknown> = {};
-    Object.defineProperty(be, "ok", {
-      enumerable: true,
-      get() {
-        if (!actual) throw new Error(`expected ${JSON.stringify(actual)} to be truthy`);
-      },
+        if (cb) cb(null, result.response);
+        resolve(result.response);
+      });
+      (self as unknown as Worker).postMessage(outbound);
     });
-    Object.defineProperty(be, "true", {
-      enumerable: true,
-      get() {
-        if (actual !== true) throw new Error(`expected ${JSON.stringify(actual)} to be true`);
-      },
-    });
-    Object.defineProperty(be, "false", {
-      enumerable: true,
-      get() {
-        if (actual !== false) throw new Error(`expected ${JSON.stringify(actual)} to be false`);
-      },
-    });
-    Object.defineProperty(be, "null", {
-      enumerable: true,
-      get() {
-        if (actual !== null) throw new Error(`expected ${JSON.stringify(actual)} to be null`);
-      },
-    });
-    Object.defineProperty(be, "undefined", {
-      enumerable: true,
-      get() {
-        if (actual !== undefined) {
-          throw new Error(`expected ${JSON.stringify(actual)} to be undefined`);
-        }
-      },
-    });
-    be.a = (type: string) => {
-      const t = Array.isArray(actual) ? "array" : typeof actual;
-      if (t !== type) throw new Error(`expected ${t} to be a ${type}`);
-    };
-    be.an = be.a;
-    chain.to.be = be;
-    chain.to.match = (re: RegExp) => {
-      if (typeof actual !== "string" || !re.test(actual)) {
-        throw new Error(`expected "${actual}" to match ${re}`);
-      }
-    };
-    return chain;
   };
 
   const pm: Record<string, unknown> = {
     request: msg.context.request,
-    environment: {
-      get: (k: string) => env[k],
-      set: (k: string, v: string) => {
-        env[k] = String(v);
-      },
-      unset: (k: string) => {
-        delete env[k];
-      },
-      has: (k: string) => k in env,
-      toObject: () => ({ ...env }),
-    },
-    variables: {
-      get: (k: string) => vars[k],
-      set: (k: string, v: string) => {
-        vars[k] = String(v);
-      },
-      unset: (k: string) => {
-        delete vars[k];
-      },
-      has: (k: string) => k in vars,
-      toObject: () => ({ ...vars }),
-    },
+    environment: scopeApi(scope.env),
+    globals: scopeApi(scope.globals),
+    collectionVariables: scopeApi(scope.collectionVariables),
+    variables: scopeApi(scope.vars),
+    iterationData: readonlyScopeApi(
+      msg.context.iterationData,
+      "pm.iterationData",
+    ),
     expect,
+    sendRequest,
   };
 
   if (msg.kind === "test" && msg.context.response) {
@@ -221,9 +247,26 @@ function buildPm(msg: WorkerInMessage, out: WorkerOutMessage) {
         return r.status;
       },
     };
-    pm.test = (name: string, fn: () => void) => {
+    pm.test = (name: string, fn: () => void | Promise<void>) => {
       try {
-        fn();
+        const result = fn();
+        // `pm.test` accepts async test bodies in Postman. We keep the
+        // signature synchronous-looking but adopt a returned Promise so
+        // failures inside async tests still report correctly.
+        if (result && typeof (result as Promise<void>).then === "function") {
+          // Wait for the promise — the AsyncFunction wrapper around the
+          // user script already awaits the final return value, so as
+          // long as the user awaits this themselves, errors propagate.
+          return (result as Promise<void>).then(
+            () => out.tests.push({ name, passed: true }),
+            (e: Error) =>
+              out.tests.push({
+                name,
+                passed: false,
+                error: e?.message ?? String(e),
+              }),
+          );
+        }
         out.tests.push({ name, passed: true });
       } catch (e) {
         out.tests.push({ name, passed: false, error: (e as Error).message });
@@ -237,16 +280,26 @@ function buildPm(msg: WorkerInMessage, out: WorkerOutMessage) {
 
   // Snapshot end state so we can ship mutations back.
   pm.__capture = () => {
-    out.environment = env;
-    out.variables = vars;
+    out.environment = scope.env;
+    out.globals = scope.globals;
+    out.collectionVariables = scope.collectionVariables;
+    out.variables = scope.vars;
   };
 
   return pm;
 }
 
+function normalizeHeader(
+  header: Record<string, string> | { key: string; value: string }[] | undefined,
+): { key: string; value: string }[] | undefined {
+  if (!header) return undefined;
+  if (Array.isArray(header)) return header;
+  return Object.entries(header).map(([key, value]) => ({ key, value }));
+}
+
 // ---- Console capture ---------------------------------------------------------
 
-function buildConsole(out: WorkerOutMessage) {
+function buildConsole(out: WorkerDoneMessage) {
   const stringify = (v: unknown) => {
     if (v === null) return "null";
     if (v === undefined) return "undefined";
@@ -268,20 +321,39 @@ function buildConsole(out: WorkerOutMessage) {
 
 self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
   const msg = e.data;
-  const out: WorkerOutMessage = {
+
+  // Dispatch sendRequest results back to the awaiting promise. Multiple
+  // calls can be in flight; the id discriminates.
+  if (msg.type === "sendRequestResult") {
+    const resolver = pending.get(msg.id);
+    if (resolver) resolver(msg);
+    return;
+  }
+
+  // Otherwise this is the initial "run the script" message.
+  const out: WorkerDoneMessage = {
+    type: "done",
     ok: false,
     environment: { ...msg.context.environment },
+    globals: { ...msg.context.globals },
+    collectionVariables: { ...msg.context.collectionVariables },
     variables: { ...msg.context.variables },
     tests: [],
     logs: [],
   };
 
   try {
-    const pm = buildPm(msg, out);
+    const scope: ScopeMap = {
+      env: { ...msg.context.environment },
+      globals: { ...msg.context.globals },
+      collectionVariables: { ...msg.context.collectionVariables },
+      vars: { ...msg.context.variables },
+    };
+    const pm = buildPm(msg, out, scope);
     const sandboxedConsole = buildConsole(out);
     // Use AsyncFunction so user scripts can `await` async tasks (e.g.
-    // fetch, timers). The runner will terminate this Worker if the
-    // returned promise outlives the deadline.
+    // pm.sendRequest, fetch, timers). The runner will terminate this
+    // Worker if the returned promise outlives the deadline.
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
     const fn = new AsyncFunction("pm", "console", msg.source);
     Promise.resolve(fn(pm, sandboxedConsole))

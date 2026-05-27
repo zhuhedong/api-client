@@ -19,6 +19,42 @@ export interface PipelineDefaults {
    *  larger bodies and flags `body_truncated=true`. Optional so older
    *  callers compile; the backend falls back to its 10 MiB default. */
   maxBodyBytes?: number;
+  /** Default redirect policy applied when the request doesn't override it. */
+  defaultRedirectPolicy?: "follow" | "none" | "manual";
+  /** Default redirect cap. */
+  defaultMaxRedirects?: number;
+  /** Default proxy URL. Empty string = no proxy. */
+  defaultProxyUrl?: string;
+}
+
+/** Subset of the request store that holds pipeline defaults. We accept
+ *  a plain object so this helper has no dependency on the store module
+ *  and stays unit-testable. */
+export interface PipelineDefaultsSource {
+  defaultTimeoutMs: number;
+  verifyTlsDefault: boolean;
+  maxBodyBytes: number;
+  defaultRedirectPolicy: "follow" | "none" | "manual";
+  defaultMaxRedirects: number;
+  defaultProxyUrl: string;
+}
+
+/** Build a `PipelineDefaults` from the store. Centralizing the field list
+ *  here prevents the "single send honours setting X, runner doesn't"
+ *  class of bug — every caller goes through this one shape, so a new
+ *  default can't be added to the store without showing up everywhere it
+ *  needs to be threaded. */
+export function pipelineDefaultsFrom(
+  source: PipelineDefaultsSource,
+): PipelineDefaults {
+  return {
+    defaultTimeoutMs: source.defaultTimeoutMs,
+    verifyTlsDefault: source.verifyTlsDefault,
+    maxBodyBytes: source.maxBodyBytes,
+    defaultRedirectPolicy: source.defaultRedirectPolicy,
+    defaultMaxRedirects: source.defaultMaxRedirects,
+    defaultProxyUrl: source.defaultProxyUrl,
+  };
 }
 
 /** Everything needed to execute one request end-to-end. */
@@ -29,6 +65,14 @@ export interface PipelineInput {
   envVars: Record<string, string>;
   /** Mutable transient (per-run) variable scope. */
   transientVars: Record<string, string>;
+  /** Mutable workspace-global scope. Scripts can read/write via `pm.globals`. */
+  globalVars?: Record<string, string>;
+  /** Mutable collection scope (the request's owning collection).
+   *  Scripts can read/write via `pm.collectionVariables`. */
+  collectionVars?: Record<string, string>;
+  /** Read-only iteration data row (CSV-driven runs). Available as
+   *  `pm.iterationData` in scripts. Default empty. */
+  iterationData?: Record<string, string>;
   defaults: PipelineDefaults;
 }
 
@@ -197,9 +241,14 @@ export async function buildSendPayload(
     timeout_ms: req.timeoutMs ?? defaults.defaultTimeoutMs,
     request_id: req.id,
     verify_tls: req.verifyTls ?? defaults.verifyTlsDefault,
-    redirect_policy: req.redirectPolicy ?? null,
-    max_redirects: req.maxRedirects ?? null,
-    proxy_url: req.proxyUrl?.trim() ? req.proxyUrl.trim() : null,
+    redirect_policy: req.redirectPolicy ?? defaults.defaultRedirectPolicy ?? null,
+    max_redirects:
+      req.maxRedirects ?? defaults.defaultMaxRedirects ?? null,
+    proxy_url: req.proxyUrl?.trim()
+      ? req.proxyUrl.trim()
+      : defaults.defaultProxyUrl?.trim()
+      ? defaults.defaultProxyUrl.trim()
+      : null,
     client_cert:
       req.clientCert && req.clientCert.path
         ? { path: req.clientCert.path, password: req.clientCert.password ?? null }
@@ -220,9 +269,34 @@ export async function buildSendPayload(
  * caller can persist them.
  */
 export async function executeRequestWithScripts(input: PipelineInput): Promise<PipelineResult> {
-  const { request: req, collections, envVars, transientVars, defaults } = input;
+  const {
+    request: req,
+    collections,
+    envVars,
+    transientVars,
+    globalVars,
+    collectionVars,
+    iterationData,
+    defaults,
+  } = input;
   const logs: ScriptLog[] = [];
   let scriptError: string | undefined;
+
+  // Fallback to empty maps for the new scopes so older callers that haven't
+  // been wired through yet keep working. The caller owns these maps — any
+  // mutations we adopt below land directly on the caller's object, just
+  // like envVars/transientVars.
+  const globals: Record<string, string> = globalVars ?? {};
+  const collectionScope: Record<string, string> = collectionVars ?? {};
+
+  /** Sync `target` so it equals `src`: copy all entries from src and delete
+   *  any extra keys. Lets us adopt deletions, not just additions/updates. */
+  const adopt = (target: Record<string, string>, src: Record<string, string>) => {
+    for (const k of Object.keys(src)) target[k] = src[k];
+    for (const k of Object.keys(target)) {
+      if (!(k in src)) delete target[k];
+    }
+  };
 
   // --- Pre-request script -----------------------------------------------------
   if (req.preScript && req.preScript.trim()) {
@@ -239,21 +313,19 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
           body: req.body || "",
         },
         environment: envVars,
+        globals,
+        collectionVariables: collectionScope,
         variables: transientVars,
+        iterationData: iterationData ?? {},
       });
       logs.push(...pre.logs);
       if (!pre.ok && pre.error) {
         scriptError = `Pre-request: ${pre.error}`;
       }
-      // Adopt env/var mutations (additions, updates, deletions).
-      for (const k of Object.keys(pre.environment)) envVars[k] = pre.environment[k];
-      for (const k of Object.keys(envVars)) {
-        if (!(k in pre.environment)) delete envVars[k];
-      }
-      for (const k of Object.keys(transientVars)) {
-        if (!(k in pre.variables)) delete transientVars[k];
-      }
-      Object.assign(transientVars, pre.variables);
+      adopt(envVars, pre.environment);
+      adopt(globals, pre.globals);
+      adopt(collectionScope, pre.collectionVariables);
+      adopt(transientVars, pre.variables);
     } catch (e) {
       // Worker spawn / import failures must not abort the request pipeline —
       // surface as a script error and continue with unmodified env/vars.
@@ -292,21 +364,20 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
         },
         response,
         environment: envVars,
+        globals,
+        collectionVariables: collectionScope,
         variables: transientVars,
+        iterationData: iterationData ?? {},
       });
       logs.push(...post.logs);
       tests = post.tests;
       if (!post.ok && post.error) {
         scriptError = scriptError ? `${scriptError}; Test: ${post.error}` : `Test: ${post.error}`;
       }
-      for (const k of Object.keys(post.environment)) envVars[k] = post.environment[k];
-      for (const k of Object.keys(envVars)) {
-        if (!(k in post.environment)) delete envVars[k];
-      }
-      for (const k of Object.keys(transientVars)) {
-        if (!(k in post.variables)) delete transientVars[k];
-      }
-      Object.assign(transientVars, post.variables);
+      adopt(envVars, post.environment);
+      adopt(globals, post.globals);
+      adopt(collectionScope, post.collectionVariables);
+      adopt(transientVars, post.variables);
     } catch (e) {
       const msg = `Test: ${e instanceof Error ? e.message : String(e)}`;
       scriptError = scriptError ? `${scriptError}; ${msg}` : msg;

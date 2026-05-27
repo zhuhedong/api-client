@@ -1,0 +1,51 @@
+# cargo-audit configuration.
+#
+# Format: https://docs.rs/cargo-audit/latest/cargo_audit/config/struct.AuditConfig.html
+#
+# Every entry below points to an advisory we can't actionably fix at our
+# level: the affected crate is a *transitive* dependency pulled in by the
+# Tauri 2 Linux WebView stack (`tauri` → `wry` → `webkit2gtk` → `gtk-rs`
+# bindings → `unic-*` / `glib` / `atk` / `gdk` / …), the `tao` windowing
+# library, or `derivative`/`instant`/`proc-macro-error` which the same
+# graph still depends on. Upgrading Tauri upstream is the only way to
+# drop these, and that's tracked separately.
+#
+# The pattern we keep:
+#   - Real CVEs in crates we control → fail the build (default `--deny warnings`).
+#   - "Unmaintained" notices on transitive deps with no upgrade path → ignore here.
+#   - When Tauri ships a new wry / tao release that drops the affected
+#     crate, remove the corresponding line and confirm `cargo audit` is
+#     clean again.
+
+[advisories]
+ignore = [
+    # ---- gtk-rs GTK3 bindings: unmaintained (Tauri Linux WebView) -------
+    "RUSTSEC-2024-0411",  # gdkwayland-sys (tao)
+    "RUSTSEC-2024-0412",  # gdk             (webkit2gtk → wry)
+    "RUSTSEC-2024-0413",  # atk             (gtk → wry)
+    "RUSTSEC-2024-0414",  # gdkx11-sys      (tao, wry)
+    "RUSTSEC-2024-0415",  # gtk             (wry, tao, webkit2gtk)
+    "RUSTSEC-2024-0416",  # atk-sys         (gtk-sys → webkit2gtk-sys)
+    "RUSTSEC-2024-0417",  # gdkx11          (wry)
+    "RUSTSEC-2024-0418",  # gdk-sys         (webkit2gtk-sys → wry)
+    "RUSTSEC-2024-0419",  # gtk3-macros     (gtk → wry / tao)
+    "RUSTSEC-2024-0420",  # gtk-sys         (webkit2gtk-sys → wry)
+
+    # ---- other transitive unmaintained crates ---------------------------
+    "RUSTSEC-2024-0388",  # derivative      (zbus 3.x → tauri linux IPC)
+    "RUSTSEC-2024-0370",  # proc-macro-error (deep build-deps)
+    "RUSTSEC-2024-0384",  # instant         (parking_lot 0.11 path)
+    "RUSTSEC-2025-0075",  # unic-char-range (icu_locid / sys-locale)
+    "RUSTSEC-2025-0080",  # unic-common
+    "RUSTSEC-2025-0081",  # unic-char-property
+    "RUSTSEC-2025-0098",  # unic-ucd-version
+    "RUSTSEC-2025-0100",  # unic-ucd-ident
+
+    # ---- soundness issue in glib::VariantStrIter ------------------------
+    # RUSTSEC-2024-0429 is a real soundness bug, but the affected
+    # iterators are not called from this crate (we don't construct
+    # `glib::Variant` ourselves; it shows up only as part of the gtk-rs
+    # binding surface that Tauri pulls in for IPC). Re-evaluate when
+    # Tauri bumps its `glib` floor.
+    "RUSTSEC-2024-0429",
+]
