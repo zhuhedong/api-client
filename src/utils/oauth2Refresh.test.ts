@@ -1,12 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   REFRESH_SKEW_MS,
-  shouldRefreshOAuth2,
-  buildRefreshRequest,
   applyRefreshResult,
+  buildRefreshRequest,
+  refreshOAuth2Token,
+  shouldRefreshOAuth2,
   updateFolderAuth,
 } from "./oauth2Refresh";
-import type { AuthConfig, Collection } from "../types";
+import type {
+  AuthConfig,
+  Collection,
+  CollectionRequest,
+  RequestItem,
+} from "../types";
 
 const oauthBase: AuthConfig = {
   auth_type: "oauth2",
@@ -191,5 +197,167 @@ describe("updateFolderAuth", () => {
     const out = updateFolderAuth(collection, "does-not-exist", newAuth);
     expect(out).not.toBe(collection);
     expect(out.folders[0].auth?.oauth2_access_token).toBe("old-a");
+  });
+});
+
+describe("refreshOAuth2Token", () => {
+  const now = 10_000_000;
+
+  function makeRequestItem(over: Partial<RequestItem> = {}): RequestItem {
+    return {
+      id: "r1",
+      name: "Req",
+      method: "GET",
+      url: "https://api.example.test/me",
+      headers: [],
+      params: [],
+      body: "",
+      bodyType: "none",
+      formData: [],
+      createdAt: 0,
+      updatedAt: 0,
+      ...over,
+    };
+  }
+
+  function makeCollection(over: Partial<Collection> = {}): Collection {
+    return {
+      id: "c1",
+      name: "Demo",
+      description: "",
+      requests: [],
+      folders: [],
+      variables: [],
+      created_at: 0,
+      updated_at: 0,
+      ...over,
+    };
+  }
+
+  function makeCollectionRequest(
+    over: Partial<CollectionRequest> = {},
+  ): CollectionRequest {
+    return {
+      id: "r1",
+      name: "Req",
+      method: "GET",
+      url: "https://api.example.test/me",
+      headers: [],
+      params: [],
+      body: "",
+      body_type: "none",
+      auth: { auth_type: "inherit" },
+      created_at: 0,
+      updated_at: 0,
+      ...over,
+    };
+  }
+
+  it("returns noop when the resolved auth doesn't need refreshing", async () => {
+    const invoke = vi.fn();
+    const req = makeRequestItem({
+      auth: { auth_type: "bearer", bearer_token: "static" },
+    });
+    const out = await refreshOAuth2Token(req, [], invoke, now);
+    expect(out).toEqual({ kind: "noop" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns noop and skips the wire call when the token has headroom", async () => {
+    const invoke = vi.fn();
+    const req = makeRequestItem({
+      auth: {
+        ...oauthBase,
+        oauth2_token_expires_at: now + REFRESH_SKEW_MS * 5,
+      },
+    });
+    const out = await refreshOAuth2Token(req, [], invoke, now);
+    expect(out).toEqual({ kind: "noop" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("invokes the token exchange and returns the new auth + 'request' source for inline auth", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      access_token: "fresh-access",
+      expires_at: now + 3600_000,
+      refresh_token: null,
+    });
+    const req = makeRequestItem({
+      auth: { ...oauthBase, oauth2_token_expires_at: now - 1000 },
+    });
+    const out = await refreshOAuth2Token(req, [], invoke, now);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("oauth2_fetch_token", {
+      request: expect.objectContaining({ grant_type: "refresh_token" }),
+    });
+    expect(out.kind).toBe("write");
+    if (out.kind !== "write") return;
+    expect(out.source).toEqual({ source: "request" });
+    expect(out.newAuth.oauth2_access_token).toBe("fresh-access");
+    expect(out.newAuth.oauth2_token_expires_at).toBe(now + 3600_000);
+  });
+
+  it("locates a collection-level auth source when the request inherits", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      access_token: "a",
+      expires_at: now + 1,
+      refresh_token: "rotated",
+    });
+    const colReq = makeCollectionRequest();
+    const col = makeCollection({
+      auth: { ...oauthBase, oauth2_token_expires_at: now - 1 },
+      requests: [colReq],
+    });
+    const req = makeRequestItem({
+      auth: { auth_type: "inherit" },
+      collectionId: col.id,
+    });
+    const out = await refreshOAuth2Token(req, [col], invoke, now);
+    expect(out.kind).toBe("write");
+    if (out.kind !== "write") return;
+    expect(out.source).toEqual({ source: "collection", collectionId: "c1" });
+    expect(out.newAuth.oauth2_refresh_token).toBe("rotated");
+  });
+
+  it("locates a folder-level auth source by walking the tree", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      access_token: "a",
+      expires_at: now + 1,
+      refresh_token: null,
+    });
+    const colReq = makeCollectionRequest();
+    const col = makeCollection({
+      folders: [
+        {
+          id: "fA",
+          name: "outer",
+          auth: { ...oauthBase, oauth2_token_expires_at: now - 1 },
+          requests: [colReq],
+          folders: [],
+        },
+      ],
+    });
+    const req = makeRequestItem({
+      auth: { auth_type: "inherit" },
+      collectionId: col.id,
+    });
+    const out = await refreshOAuth2Token(req, [col], invoke, now);
+    expect(out.kind).toBe("write");
+    if (out.kind !== "write") return;
+    expect(out.source).toEqual({
+      source: "folder",
+      collectionId: "c1",
+      folderId: "fA",
+    });
+  });
+
+  it("propagates the invoke rejection (caller decides how to surface it)", async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error("network down"));
+    const req = makeRequestItem({
+      auth: { ...oauthBase, oauth2_token_expires_at: now - 1 },
+    });
+    await expect(refreshOAuth2Token(req, [], invoke, now)).rejects.toThrow(
+      "network down",
+    );
   });
 });

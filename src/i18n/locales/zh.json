@@ -63,6 +63,10 @@
     "new_request": "新建请求",
     "import": "导入",
     "export": "导出",
+    "export_collection": "导出集合",
+    "export_postman": "导出为 Postman v2.1",
+    "export_openapi": "导出为 OpenAPI 3.0",
+    "generate_mocks": "生成 Mock 路由",
     "no_active_environment": "未激活环境",
     "delete_collection_title": "删除集合？",
     "delete_collection_message": "删除集合 \"{{name}}\" 吗？集合下的所有请求和文件夹都将被移除。",
@@ -150,7 +154,9 @@
     "copy_curl": "复制为 cURL",
     "copy_har": "复制为 HAR",
     "save_to_variable": "保存到变量…",
-    "save_to_variable_done": "已保存到 {{env}}.{{key}}"
+    "save_to_variable_done": "已保存到 {{env}}.{{key}}",
+    "request_failed": "请求失败",
+    "retry": "重试"
   },
   "save_variable": {
     "title": "将响应值保存到变量",
@@ -334,7 +340,20 @@
     "request_failed": "请求失败",
     "request_cancelled": "请求已取消",
     "invalid_json": "JSON 格式错误",
-    "no_workspace": "无活动工作区"
+    "no_workspace": "无活动工作区",
+    "kind": {
+      "cancelled": "已取消",
+      "timeout": "请求超时",
+      "dns": "DNS 解析失败",
+      "connection": "连接失败",
+      "tls": "TLS / 证书错误",
+      "proxy": "代理错误",
+      "client_certificate": "客户端证书错误",
+      "input": "请求参数无效",
+      "redirect": "重定向异常",
+      "body": "响应体读取失败",
+      "unknown": "请求失败"
+    }
   },
   "codegen": {
     "title": "生成代码",
@@ -355,7 +374,11 @@
     "summary_passed_failed": "{{passed}} 通过，{{failed}} 失败",
     "summary_errored": "，{{count}} 个出错",
     "summary_completed": "完成 {{count}} 个请求",
-    "hint": "配置后点击运行，会按顺序依次发出所有请求。"
+    "hint": "配置后点击运行，会按顺序依次发出所有请求。",
+    "export": "导出",
+    "export_junit": "JUnit XML",
+    "export_json": "JSON",
+    "export_html": "HTML 报告"
   },
   "mock": {
     "title": "Mock 服务器",
@@ -447,6 +470,25 @@
     "type_api_key": "API Key",
     "type_oauth2": "OAuth 2",
     "type_sigv4": "AWS SigV4",
+    "type_digest": "Digest 摘要",
+    "type_oauth1": "OAuth 1.0",
+    "type_jwt": "JWT Bearer",
+    "digest_notice": "首次请求若返回 401，将自动用 Digest 响应再次发起请求。支持 MD5 / SHA-256 与 qop=auth / auth-int。",
+    "oauth1_consumer_key": "Consumer Key",
+    "oauth1_consumer_secret": "Consumer Secret",
+    "oauth1_token": "Access Token",
+    "oauth1_token_secret": "Token Secret",
+    "oauth1_signature_method": "签名方法",
+    "oauth1_realm": "Realm",
+    "oauth1_add_to": "添加位置",
+    "add_to_header": "Authorization 头",
+    "add_to_query": "查询字符串",
+    "jwt_algorithm": "算法",
+    "jwt_secret": "密钥",
+    "jwt_secret_is_base64": "密钥为 base64 编码",
+    "jwt_payload": "Payload (JSON)",
+    "jwt_request_header": "请求头名称",
+    "jwt_header_prefix": "前缀",
     "inherits_from": "认证继承自 {{source}}。",
     "inherits_default": "从父文件夹 / 集合继承认证。请在集合上右键 → 编辑认证 来配置。",
     "none_explicit": "本请求显示选择不使用继承的认证。",

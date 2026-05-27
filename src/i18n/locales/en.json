@@ -63,6 +63,10 @@
     "new_request": "New Request",
     "import": "Import",
     "export": "Export",
+    "export_collection": "Export collection",
+    "export_postman": "Export as Postman v2.1",
+    "export_openapi": "Export as OpenAPI 3.0",
+    "generate_mocks": "Generate Mock routes",
     "no_active_environment": "No active environment",
     "delete_collection_title": "Delete collection?",
     "delete_collection_message": "Delete collection \"{{name}}\"? All requests and folders inside it will be removed.",
@@ -150,7 +154,9 @@
     "copy_curl": "Copy as cURL",
     "copy_har": "Copy as HAR",
     "save_to_variable": "Save to variable…",
-    "save_to_variable_done": "Saved to {{env}}.{{key}}"
+    "save_to_variable_done": "Saved to {{env}}.{{key}}",
+    "request_failed": "Request Failed",
+    "retry": "Retry"
   },
   "save_variable": {
     "title": "Save response value to variable",
@@ -338,7 +344,20 @@
     "request_failed": "Request failed",
     "request_cancelled": "Request cancelled",
     "invalid_json": "Invalid JSON",
-    "no_workspace": "No active workspace"
+    "no_workspace": "No active workspace",
+    "kind": {
+      "cancelled": "Cancelled",
+      "timeout": "Request Timed Out",
+      "dns": "DNS Lookup Failed",
+      "connection": "Connection Failed",
+      "tls": "TLS / Certificate Error",
+      "proxy": "Proxy Error",
+      "client_certificate": "Client Certificate Error",
+      "input": "Invalid Request",
+      "redirect": "Redirect Loop",
+      "body": "Response Body Error",
+      "unknown": "Request Failed"
+    }
   },
   "codegen": {
     "title": "Generate Code",
@@ -359,7 +378,11 @@
     "summary_passed_failed": "{{passed}} passed, {{failed}} failed",
     "summary_errored": ", {{count}} errored",
     "summary_completed": "{{count}} requests completed",
-    "hint": "Configure and click Run to execute all requests sequentially."
+    "hint": "Configure and click Run to execute all requests sequentially.",
+    "export": "Export",
+    "export_junit": "JUnit XML",
+    "export_json": "JSON",
+    "export_html": "HTML Report"
   },
   "mock": {
     "title": "Mock Server",
@@ -452,6 +475,25 @@
     "type_api_key": "API Key",
     "type_oauth2": "OAuth 2",
     "type_sigv4": "AWS SigV4",
+    "type_digest": "Digest",
+    "type_oauth1": "OAuth 1.0",
+    "type_jwt": "JWT Bearer",
+    "digest_notice": "Sends an initial request; on 401, retries with the computed Digest response. Supports MD5 / SHA-256 and qop=auth / auth-int.",
+    "oauth1_consumer_key": "Consumer Key",
+    "oauth1_consumer_secret": "Consumer Secret",
+    "oauth1_token": "Access Token",
+    "oauth1_token_secret": "Token Secret",
+    "oauth1_signature_method": "Signature Method",
+    "oauth1_realm": "Realm",
+    "oauth1_add_to": "Add to",
+    "add_to_header": "Authorization header",
+    "add_to_query": "Query string",
+    "jwt_algorithm": "Algorithm",
+    "jwt_secret": "Secret",
+    "jwt_secret_is_base64": "Secret is base64-encoded",
+    "jwt_payload": "Payload (JSON)",
+    "jwt_request_header": "Header name",
+    "jwt_header_prefix": "Prefix",
     "inherits_from": "Inherits authentication from {{source}}.",
     "inherits_default": "Inherits authentication from this request's parent folder or collection. Configure auth on the collection (right-click → Edit auth) to use this.",
     "none_explicit": "This request explicitly opts out of inherited authentication.",

@@ -1,13 +1,16 @@
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Play, X, Square, CheckCircle2, XCircle } from "lucide-react";
+import { Play, X, Square, CheckCircle2, XCircle, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { useRequestStore } from "../store/useRequestStore";
 import {
   executeRequestWithScripts,
   pipelineDefaultsFrom,
 } from "../utils/requestPipeline";
 import { buildScopedVars } from "../utils/variableScope";
+import { exportHtml, exportJson, exportJUnit } from "../utils/runnerExport";
 import { CodeEditor } from "./CodeEditor";
 import type {
   Collection,
@@ -15,18 +18,9 @@ import type {
   CollectionFolder,
   RequestItem,
   KeyValue,
-  TestResult,
 } from "../types";
 
-interface RunResult {
-  name: string;
-  method: string;
-  status?: number;
-  timeMs?: number;
-  tests: TestResult[];
-  error?: string;
-  iteration: number;
-}
+import type { RunResult } from "../utils/runnerExport";
 
 function genId(): string {
   return Math.random().toString(36).substring(2, 15);
@@ -87,6 +81,7 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
   const [dataJson, setDataJson] = useState("");
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<RunResult[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
   const cancelRef = useRef(false);
 
   if (!col) return null;
@@ -135,6 +130,23 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
       const dataRow = dataRows[iter] ?? {};
       const transientVars: Record<string, string> = { ...dataRow };
 
+      // Per-iteration scope maps for pm.globals / pm.collectionVariables.
+      // Initialized from the workspace/collection state at the start of
+      // each iteration, then mutated in place across all requests within
+      // the iteration so that `pm.globals.set("token", "abc")` in
+      // Request A is visible to Request B — matching Postman runner
+      // semantics. A fresh copy is taken per iteration so iterations stay
+      // independent.
+      const globalVars: Record<string, string> = {};
+      for (const v of workspace?.variables ?? []) {
+        if (v.enabled && v.key) globalVars[v.key] = v.value;
+      }
+      const owningCollection = collections.find((c) => c.id === collectionId);
+      const collectionVars: Record<string, string> = {};
+      for (const v of owningCollection?.variables ?? []) {
+        if (v.enabled && v.key) collectionVars[v.key] = v.value;
+      }
+
       for (const req of requests) {
         if (cancelRef.current) break;
 
@@ -149,19 +161,6 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
           environments,
           request: requestItem,
         });
-        // Per-scope snapshots so pm.globals / pm.collectionVariables work
-        // identically to single-send: each script run gets a writable
-        // map, mutations land back on the workspace / collection on
-        // disk just like the single-send path persists them.
-        const globalVars: Record<string, string> = {};
-        for (const v of workspace?.variables ?? []) {
-          if (v.enabled && v.key) globalVars[v.key] = v.value;
-        }
-        const owningCollection = collections.find((c) => c.id === collectionId);
-        const collectionVars: Record<string, string> = {};
-        for (const v of owningCollection?.variables ?? []) {
-          if (v.enabled && v.key) collectionVars[v.key] = v.value;
-        }
         const result = await executeRequestWithScripts({
           request: requestItem,
           collections,
@@ -169,14 +168,7 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
           transientVars,
           globalVars,
           collectionVars,
-          // The CSV row is the iteration data Postman exposes to scripts;
-          // read-only — scripts can read pm.iterationData.get("x") for
-          // data-driven runs.
           iterationData: dataRow,
-          // Snapshot the live store via getState so the runner picks up
-          // settings tweaks the user makes mid-run, and so the field list
-          // stays in lock-step with useRequestStore.sendRequest (both go
-          // through the same `pipelineDefaultsFrom` helper).
           defaults: pipelineDefaultsFrom(useRequestStore.getState()),
         });
 
@@ -186,7 +178,7 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
           status: result.response?.status,
           timeMs: result.response?.time_ms,
           tests: result.tests,
-          error: result.error || result.scriptError,
+          error: result.error?.message || result.scriptError,
           iteration: iter + 1,
         };
         setResults((prev) => [...prev, entry]);
@@ -206,6 +198,32 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
   );
   const failedTests = totalTests - passedTests;
   const erroredRequests = results.filter((r) => r.error).length;
+
+  const doExport = async (format: "junit" | "json" | "html") => {
+    setExportOpen(false);
+    const ext = format === "junit" ? "xml" : format;
+    const filters =
+      format === "junit"
+        ? [{ name: "JUnit XML", extensions: ["xml"] }]
+        : format === "json"
+          ? [{ name: "JSON", extensions: ["json"] }]
+          : [{ name: "HTML", extensions: ["html"] }];
+    const path = await saveFileDialog({
+      defaultPath: `${col.name}-run.${ext}`,
+      filters,
+    });
+    if (!path) return;
+    // Derive iteration count from actual results, not the input field
+    // (the input may have changed post-run, or data file may override it).
+    const actualIterations = Math.max(...results.map((r) => r.iteration), 0);
+    const content =
+      format === "junit"
+        ? exportJUnit(results, col.name, actualIterations)
+        : format === "json"
+          ? exportJson(results, col.name, actualIterations)
+          : exportHtml(results, col.name, actualIterations);
+    await invoke("write_file", { path, contents: content });
+  };
 
   // Portal to <body> so we escape the sidebar's `backdrop-blur-xl`
   // containing block (without it, the modal is clipped to the sidebar).
@@ -288,15 +306,48 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
               </button>
             )}
             {results.length > 0 && !running && (
-              <span className="text-[11px] text-text-tertiary">
-                {totalTests > 0 && (
-                  <span>
-                    {t("runner.summary_passed_failed", { passed: passedTests, failed: failedTests })}
-                    {erroredRequests > 0 && t("runner.summary_errored", { count: erroredRequests })}
-                  </span>
-                )}
-                {totalTests === 0 && t("runner.summary_completed", { count: results.length })}
-              </span>
+              <>
+                <span className="text-[11px] text-text-tertiary">
+                  {totalTests > 0 && (
+                    <span>
+                      {t("runner.summary_passed_failed", { passed: passedTests, failed: failedTests })}
+                      {erroredRequests > 0 && t("runner.summary_errored", { count: erroredRequests })}
+                    </span>
+                  )}
+                  {totalTests === 0 && t("runner.summary_completed", { count: results.length })}
+                </span>
+                <div className="relative ml-auto">
+                  <button
+                    onClick={() => setExportOpen(!exportOpen)}
+                    className="btn-apple btn-apple-sm flex items-center gap-1.5 text-[11px]"
+                  >
+                    <Download size={12} />
+                    {t("runner.export")}
+                  </button>
+                  {exportOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-bg-primary border border-border rounded-apple shadow-lg py-1 z-50 min-w-[140px]">
+                      <button
+                        onClick={() => doExport("junit")}
+                        className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 text-text-primary"
+                      >
+                        {t("runner.export_junit")}
+                      </button>
+                      <button
+                        onClick={() => doExport("json")}
+                        className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 text-text-primary"
+                      >
+                        {t("runner.export_json")}
+                      </button>
+                      <button
+                        onClick={() => doExport("html")}
+                        className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 text-text-primary"
+                      >
+                        {t("runner.export_html")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

@@ -108,7 +108,7 @@ export function SsePanel() {
 
       {error && (
         <div className="px-4 py-2 text-[11px] text-error border-b border-border-light bg-error/5">
-          {error}
+          {error.message}
         </div>
       )}
 

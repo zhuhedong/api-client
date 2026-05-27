@@ -10,6 +10,10 @@ import { resolveAuth } from "./auth";
 import { runScript } from "./scriptRunner";
 import { substituteAll } from "./dynamicVars";
 import { signSigV4 } from "./sigv4";
+import { signJwt } from "./jwt";
+import { signOauth1 } from "./oauth1";
+import { parseDigestChallenge, buildDigestAuthHeader } from "./digest";
+import { toRequestError } from "./requestError";
 
 /** Defaults pulled from the request store / settings panel. */
 export interface PipelineDefaults {
@@ -79,7 +83,15 @@ export interface PipelineInput {
 /** Per-request execution report — what both the tab UI and the runner display. */
 export interface PipelineResult {
   response?: ResponseData;
-  error?: string;
+  /**
+   * Structured failure from the send phase. Frontend code that wants the
+   * raw human-readable string should read `error.message`.
+   *
+   * For backwards compatibility with the collection runner / runner export
+   * format, callers may also serialize this via `.message` when emitting
+   * legacy string-only payloads.
+   */
+  error?: import("../types").RequestError;
   tests: TestResult[];
   logs: ScriptLog[];
   scriptError?: string;
@@ -153,6 +165,36 @@ export async function buildSendPayload(
         value: `Bearer ${auth.oauth2_access_token}`,
         enabled: true,
       });
+    } else if (auth.auth_type === "jwt" && auth.jwt_secret) {
+      // Sign a fresh JWT for this request.
+      let claims: Record<string, unknown> = {};
+      const payloadStr = (auth.jwt_payload || "").trim();
+      if (payloadStr) {
+        try {
+          claims = JSON.parse(sub(payloadStr)) as Record<string, unknown>;
+        } catch {
+          // Bad JSON in the payload — emit an empty token to surface a 401
+          // instead of corrupting headers with a parse-error string.
+          claims = {};
+        }
+      }
+      const token = await signJwt({
+        alg: auth.jwt_algorithm ?? "HS256",
+        payload: claims,
+        secret: sub(auth.jwt_secret),
+        secretIsBase64: !!auth.jwt_secret_is_base64,
+      });
+      const headerName = auth.jwt_request_header?.trim() || "Authorization";
+      const prefix = auth.jwt_header_prefix ?? "Bearer ";
+      headers.push({
+        key: headerName,
+        value: `${prefix}${token}`,
+        enabled: true,
+      });
+    } else if (auth.auth_type === "oauth1" && auth.oauth1_consumer_key) {
+      // OAuth 1.0a — must be signed *after* the final URL is known.
+      // We stash a sentinel here and run the signer after body assembly.
+      // (Implementation below.)
     }
     // SigV4 happens after body construction below, since the canonical
     // request hashes the payload. We resolve auth here and stash a flag.
@@ -198,6 +240,31 @@ export async function buildSendPayload(
     });
   } else if (req.bodyType !== "none") {
     bodyStr = sub(req.body || "") || null;
+  }
+
+  // OAuth 1.0a — must be signed *after* the final URL is known so query
+  // params are included in the base string.
+  if (auth && auth.auth_type === "oauth1" && auth.oauth1_consumer_key) {
+    const result = await signOauth1({
+      method: req.method,
+      url: finalUrl,
+      consumerKey: sub(auth.oauth1_consumer_key),
+      consumerSecret: sub(auth.oauth1_consumer_secret || ""),
+      token: auth.oauth1_token ? sub(auth.oauth1_token) : undefined,
+      tokenSecret: auth.oauth1_token_secret ? sub(auth.oauth1_token_secret) : undefined,
+      signatureMethod: auth.oauth1_signature_method ?? "HMAC-SHA1",
+      realm: auth.oauth1_realm ? sub(auth.oauth1_realm) : undefined,
+      addTo: auth.oauth1_add_to ?? "header",
+    });
+    if (result.authorizationHeader) {
+      headers.push({ key: "Authorization", value: result.authorizationHeader, enabled: true });
+    } else if (result.queryParams) {
+      const sep = finalUrl.includes("?") ? "&" : "?";
+      const qs = Object.entries(result.queryParams)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+      finalUrl = `${finalUrl}${sep}${qs}`;
+    }
   }
 
   // AWS SigV4 — signs URL/headers/body. Has to run after the body is fully
@@ -335,7 +402,7 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
 
   // --- Send -------------------------------------------------------------------
   let response: ResponseData | undefined;
-  let error: string | undefined;
+  let error: import("../types").RequestError | undefined;
   let finalUrl = req.url;
   let bodyStr: string | null = null;
   let headerMap: Record<string, string> = {};
@@ -345,8 +412,41 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
     bodyStr = built.bodyStr;
     headerMap = Object.fromEntries(built.headers.map((h) => [h.key, h.value]));
     response = await invoke<ResponseData>("send_request", { payload: built.payload });
+
+    // HTTP Digest two-stage flow: if the request returned 401 with a Digest
+    // challenge AND the resolved auth is Digest, re-send with the computed
+    // Authorization header. We only retry once to avoid an infinite loop.
+    const resolvedAuth = resolveAuth(req, collections);
+    if (
+      response &&
+      response.status === 401 &&
+      resolvedAuth?.auth_type === "digest" &&
+      resolvedAuth.digest_username
+    ) {
+      const wwwAuth = pickHeader(response.headers, "WWW-Authenticate") ?? "";
+      const challenge = parseDigestChallenge(wwwAuth);
+      if (challenge) {
+        const uri = pathAndQueryOf(finalUrl);
+        const sub = makeSubstitute(envVars, transientVars);
+        const auth = await buildDigestAuthHeader(challenge, {
+          username: sub(resolvedAuth.digest_username),
+          password: sub(resolvedAuth.digest_password || ""),
+          method: req.method,
+          uri,
+          entityBody: bodyStr ?? undefined,
+        });
+        // Replace any prior Authorization header from the first attempt.
+        const nextHeaders = built.headers.filter(
+          (h) => h.key.toLowerCase() !== "authorization",
+        );
+        nextHeaders.push({ key: "Authorization", value: auth, enabled: true });
+        const retryPayload = { ...built.payload, headers: nextHeaders };
+        response = await invoke<ResponseData>("send_request", { payload: retryPayload });
+        headerMap = Object.fromEntries(nextHeaders.map((h) => [h.key, h.value]));
+      }
+    }
   } catch (e) {
-    error = String(e);
+    error = toRequestError(e);
   }
 
   // --- Post-response (test) script -------------------------------------------
@@ -385,4 +485,26 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
   }
 
   return { response, error, tests, logs, scriptError, finalUrl };
+}
+
+/** Case-insensitive header lookup against a Record<string,string> map. */
+function pickHeader(
+  headers: Record<string, string>,
+  name: string,
+): string | undefined {
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  return undefined;
+}
+
+/** Extract the path+query portion of a URL for use as the Digest "uri" field. */
+function pathAndQueryOf(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.pathname + u.search;
+  } catch {
+    return url;
+  }
 }

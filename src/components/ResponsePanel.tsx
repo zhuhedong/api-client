@@ -397,11 +397,24 @@ export function ResponsePanel() {
   }
 
   if (error) {
+    const titleKey = `errors.kind.${error.kind}`;
+    const fallbackTitle = t("response.request_failed");
+    const title = t(titleKey, { defaultValue: fallbackTitle });
     return (
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="bg-error/5 rounded-apple p-4 max-w-md text-center">
-          <p className="text-error font-medium text-[13px] mb-1">Request Failed</p>
-          <p className="text-text-secondary text-[12px] leading-relaxed">{error}</p>
+          <p className="text-error font-medium text-[13px] mb-1">{title}</p>
+          <p className="text-text-secondary text-[12px] leading-relaxed mb-3">{error.message}</p>
+          <p className="text-text-tertiary text-[10px] font-mono mb-3">{error.code}</p>
+          {error.retryable && (
+            <button
+              type="button"
+              onClick={() => void useRequestStore.getState().sendRequest()}
+              className="px-3 py-1.5 rounded-apple bg-accent text-white text-[12px] font-medium hover:opacity-90 transition"
+            >
+              {t("response.retry")}
+            </button>
+          )}
         </div>
       </div>
     );

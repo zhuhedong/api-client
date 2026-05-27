@@ -168,6 +168,12 @@ function labelFor(a: AuthConfig): string {
       return "OAuth 2";
     case "sigv4":
       return "AWS SigV4";
+    case "digest":
+      return "Digest";
+    case "oauth1":
+      return "OAuth 1.0";
+    case "jwt":
+      return "JWT";
     case "none":
       return "No auth";
     case "inherit":

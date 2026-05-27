@@ -1,4 +1,10 @@
-import type { AuthConfig, Collection, CollectionFolder } from "../types";
+import type {
+  AuthConfig,
+  Collection,
+  CollectionFolder,
+  RequestItem,
+} from "../types";
+import { locateAuthSource, resolveAuth, type AuthSource } from "./auth";
 
 /** Margin (ms) we treat a token as already-expired even though the clock
  *  says it's still valid. Backs the same idea as the backend's 30-second
@@ -64,4 +70,53 @@ export function updateFolderAuth(
       return { ...f, folders: walk(f.folders) };
     });
   return { ...collection, folders: walk(collection.folders) };
+}
+
+/** Shape of the response returned by the `oauth2_fetch_token` Tauri
+ *  command. Surfacing it here keeps the wire contract co-located with
+ *  the refresh helpers. */
+export interface OAuth2TokenResponse {
+  access_token: string;
+  expires_at: number | null;
+  refresh_token: string | null;
+}
+
+/** Outcome of `refreshOAuth2Token`: either nothing to do, or the
+ *  refreshed auth config plus the location in the collection tree
+ *  where it should be written back. Returning the source lets the
+ *  caller dispatch the write to the right Zustand slice without the
+ *  helper itself depending on the store. */
+export type RefreshOutcome =
+  | { kind: "noop" }
+  | { kind: "write"; newAuth: AuthConfig; source: AuthSource };
+
+/** Minimal subset of the Tauri `invoke` signature that
+ *  `refreshOAuth2Token` actually needs. Tests pass a `vi.fn()`; the
+ *  store passes the real `@tauri-apps/api/core` import. */
+export type InvokeFn = <T>(
+  cmd: string,
+  args: { request: Record<string, unknown> },
+) => Promise<T>;
+
+/** Resolve effective auth for `req`, check whether it needs an OAuth2
+ *  refresh, perform the token exchange via the injected `invoke`, and
+ *  return the merged auth together with the location where it should
+ *  be persisted. The `invoke` parameter is injected (not imported)
+ *  so unit tests can stub the wire call without a Tauri runtime. */
+export async function refreshOAuth2Token(
+  req: RequestItem,
+  collections: Collection[],
+  invoke: InvokeFn,
+  now: number = Date.now(),
+): Promise<RefreshOutcome> {
+  const auth = resolveAuth(req, collections);
+  if (!shouldRefreshOAuth2(auth, now)) return { kind: "noop" };
+  const payload = buildRefreshRequest(auth!);
+  const resp = await invoke<OAuth2TokenResponse>("oauth2_fetch_token", {
+    request: payload,
+  });
+  const newAuth = applyRefreshResult(auth!, resp);
+  const src = locateAuthSource(req, collections);
+  if (!src) return { kind: "noop" };
+  return { kind: "write", newAuth, source: src };
 }

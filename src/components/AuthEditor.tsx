@@ -32,7 +32,18 @@ interface Props {
   inheritedFrom?: string | null;
 }
 
-const ALL: AuthConfig["auth_type"][] = ["inherit", "none", "bearer", "basic", "api_key", "oauth2", "sigv4"];
+const ALL: AuthConfig["auth_type"][] = [
+  "inherit",
+  "none",
+  "bearer",
+  "basic",
+  "api_key",
+  "oauth2",
+  "sigv4",
+  "digest",
+  "oauth1",
+  "jwt",
+];
 
 export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Props) {
   const { t } = useTranslation();
@@ -48,6 +59,9 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
       case "api_key": return t("auth.type_api_key");
       case "oauth2": return t("auth.type_oauth2");
       case "sigv4": return t("auth.type_sigv4");
+      case "digest": return t("auth.type_digest");
+      case "oauth1": return t("auth.type_oauth1");
+      case "jwt": return t("auth.type_jwt");
       default: return type;
     }
   };
@@ -222,6 +236,190 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
           <p className="text-[10px] text-text-tertiary leading-relaxed">
             {t("auth.sigv4_notice")}
           </p>
+        </div>
+      )}
+
+      {current.auth_type === "digest" && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.username")}</label>
+              <input
+                type="text"
+                value={current.digest_username || ""}
+                onChange={(e) => onChange({ ...current, digest_username: e.target.value })}
+                placeholder="username"
+                className="input-apple w-full font-mono text-[12px] mt-1"
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.password")}</label>
+              <input
+                type="password"
+                value={current.digest_password || ""}
+                onChange={(e) => onChange({ ...current, digest_password: e.target.value })}
+                placeholder="••••••••"
+                className="input-apple w-full font-mono text-[12px] mt-1"
+              />
+            </div>
+          </div>
+          <p className="text-[10px] text-text-tertiary leading-relaxed">
+            {t("auth.digest_notice")}
+          </p>
+        </div>
+      )}
+
+      {current.auth_type === "oauth1" && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_consumer_key")}</label>
+              <input
+                type="text"
+                value={current.oauth1_consumer_key || ""}
+                onChange={(e) => onChange({ ...current, oauth1_consumer_key: e.target.value })}
+                className="input-apple w-full font-mono text-[12px] mt-1"
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_consumer_secret")}</label>
+              <input
+                type="password"
+                value={current.oauth1_consumer_secret || ""}
+                onChange={(e) => onChange({ ...current, oauth1_consumer_secret: e.target.value })}
+                className="input-apple w-full font-mono text-[12px] mt-1"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_token")}</label>
+              <input
+                type="text"
+                value={current.oauth1_token || ""}
+                onChange={(e) => onChange({ ...current, oauth1_token: e.target.value })}
+                className="input-apple w-full font-mono text-[12px] mt-1"
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_token_secret")}</label>
+              <input
+                type="password"
+                value={current.oauth1_token_secret || ""}
+                onChange={(e) => onChange({ ...current, oauth1_token_secret: e.target.value })}
+                className="input-apple w-full font-mono text-[12px] mt-1"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_signature_method")}</label>
+              <select
+                value={current.oauth1_signature_method || "HMAC-SHA1"}
+                onChange={(e) => onChange({ ...current, oauth1_signature_method: e.target.value as AuthConfig["oauth1_signature_method"] })}
+                className="input-apple w-full text-[12px] mt-1"
+              >
+                <option value="HMAC-SHA1">HMAC-SHA1</option>
+                <option value="HMAC-SHA256">HMAC-SHA256</option>
+                <option value="PLAINTEXT">PLAINTEXT</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_realm")}</label>
+              <input
+                type="text"
+                value={current.oauth1_realm || ""}
+                onChange={(e) => onChange({ ...current, oauth1_realm: e.target.value })}
+                className="input-apple w-full font-mono text-[12px] mt-1"
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_add_to")}</label>
+              <select
+                value={current.oauth1_add_to || "header"}
+                onChange={(e) => onChange({ ...current, oauth1_add_to: e.target.value as "header" | "query" })}
+                className="input-apple w-full text-[12px] mt-1"
+              >
+                <option value="header">{t("auth.add_to_header")}</option>
+                <option value="query">{t("auth.add_to_query")}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {current.auth_type === "jwt" && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_algorithm")}</label>
+              <select
+                value={current.jwt_algorithm || "HS256"}
+                onChange={(e) => onChange({ ...current, jwt_algorithm: e.target.value as AuthConfig["jwt_algorithm"] })}
+                className="input-apple w-full text-[12px] mt-1"
+              >
+                <option value="HS256">HS256</option>
+                <option value="HS384">HS384</option>
+                <option value="HS512">HS512</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_secret")}</label>
+              <input
+                type="password"
+                value={current.jwt_secret || ""}
+                onChange={(e) => onChange({ ...current, jwt_secret: e.target.value })}
+                placeholder="••••••••"
+                className="input-apple w-full font-mono text-[12px] mt-1"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[12px] text-text-secondary">
+            <input
+              type="checkbox"
+              checked={!!current.jwt_secret_is_base64}
+              onChange={(e) => onChange({ ...current, jwt_secret_is_base64: e.target.checked })}
+              className="rounded"
+            />
+            {t("auth.jwt_secret_is_base64")}
+          </label>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_payload")}</label>
+            <textarea
+              value={current.jwt_payload || ""}
+              onChange={(e) => onChange({ ...current, jwt_payload: e.target.value })}
+              placeholder='{"sub":"user-1","iss":"my-app"}'
+              className="input-apple w-full font-mono text-[12px] mt-1 min-h-[90px]"
+              spellCheck={false}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_request_header")}</label>
+              <input
+                type="text"
+                value={current.jwt_request_header || ""}
+                onChange={(e) => onChange({ ...current, jwt_request_header: e.target.value })}
+                placeholder="Authorization"
+                className="input-apple w-full font-mono text-[12px] mt-1"
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_header_prefix")}</label>
+              <input
+                type="text"
+                value={current.jwt_header_prefix ?? "Bearer "}
+                onChange={(e) => onChange({ ...current, jwt_header_prefix: e.target.value })}
+                className="input-apple w-full font-mono text-[12px] mt-1"
+                spellCheck={false}
+              />
+            </div>
+          </div>
         </div>
       )}
 

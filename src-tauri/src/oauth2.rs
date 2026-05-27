@@ -895,7 +895,7 @@ mod tests {
         // `&s[..500]` would land at byte 500, which is inside the 167th
         // character (bytes 498..501) and panic. The helper must back up
         // to byte 498 (the nearest char boundary).
-        let s: String = std::iter::repeat('哈').take(200).collect();
+        let s: String = std::iter::repeat_n('哈', 200).collect();
         assert_eq!(s.len(), 600);
         let out = truncate_for_error_snippet(&s, 500);
         // Sanity-check: the truncated body must be valid UTF-8 (already

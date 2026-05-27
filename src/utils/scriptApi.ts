@@ -71,13 +71,35 @@ export function readonlyScopeApi(
 
 // ---- Chai-flavoured assertion chain ----------------------------------------
 
+export interface ChainHave {
+  status: (code: number) => void;
+  property: (key: string) => void;
+  lengthOf: (n: number) => void;
+  length: (n: number) => void;
+}
+
+export interface ChainBe {
+  readonly ok: void;
+  readonly true: void;
+  readonly false: void;
+  readonly null: void;
+  readonly undefined: void;
+  readonly empty: void;
+  a: (type: string) => void;
+  an: (type: string) => void;
+  above: (n: number) => void;
+  below: (n: number) => void;
+  greaterThan: (n: number) => void;
+  lessThan: (n: number) => void;
+}
+
 export interface ChainTo {
   equal: (expected: unknown) => void;
   eql: (expected: unknown) => void;
   include: (expected: unknown) => void;
   match: (re: RegExp) => void;
-  have: Record<string, unknown>;
-  be: Record<string, unknown>;
+  have: ChainHave;
+  be: ChainBe;
   above: (n: number) => void;
   below: (n: number) => void;
   greaterThan: (n: number) => void;
@@ -140,7 +162,7 @@ export function buildChain(actual: unknown, negate: boolean): ChainNode {
       `expected ${actual} to be below ${n}`,
     );
 
-  const have = {
+  const have: ChainHave = {
     status: (code: number) => {
       const r = actual as { status?: number };
       failIfNot(
@@ -154,74 +176,35 @@ export function buildChain(actual: unknown, negate: boolean): ChainNode {
       failIfNot(hasIt, `expected object to have property "${key}"`);
     },
     lengthOf,
-    /** `.have.length` is an alias used by some scripts. */
     length: lengthOf,
   };
 
-  const be: Record<string, unknown> = {};
-  Object.defineProperty(be, "ok", {
-    enumerable: true,
-    get() {
-      failIfNot(!!actual, `expected ${JSON.stringify(actual)} to be truthy`);
-    },
-  });
-  Object.defineProperty(be, "true", {
-    enumerable: true,
-    get() {
-      failIfNot(
-        actual === true,
-        `expected ${JSON.stringify(actual)} to be true`,
-      );
-    },
-  });
-  Object.defineProperty(be, "false", {
-    enumerable: true,
-    get() {
-      failIfNot(
-        actual === false,
-        `expected ${JSON.stringify(actual)} to be false`,
-      );
-    },
-  });
-  Object.defineProperty(be, "null", {
-    enumerable: true,
-    get() {
-      failIfNot(
-        actual === null,
-        `expected ${JSON.stringify(actual)} to be null`,
-      );
-    },
-  });
-  Object.defineProperty(be, "undefined", {
-    enumerable: true,
-    get() {
-      failIfNot(
-        actual === undefined,
-        `expected ${JSON.stringify(actual)} to be undefined`,
-      );
-    },
-  });
-  Object.defineProperty(be, "empty", {
-    enumerable: true,
-    get() {
-      let empty = false;
-      if (actual == null) empty = true;
-      else if (typeof actual === "string" || Array.isArray(actual))
-        empty = (actual as { length: number }).length === 0;
-      else if (typeof actual === "object")
-        empty = Object.keys(actual as object).length === 0;
-      failIfNot(empty, `expected ${JSON.stringify(actual)} to be empty`);
-    },
-  });
-  be.a = (type: string) => {
+  const beTypeFn = (type: string) => {
     const t = Array.isArray(actual) ? "array" : typeof actual;
     failIfNot(t === type, `expected ${t} to be a ${type}`);
   };
-  be.an = be.a;
-  be.above = aboveFn;
-  be.below = belowFn;
-  be.greaterThan = aboveFn;
-  be.lessThan = belowFn;
+  const be: ChainBe = Object.defineProperties(
+    { a: beTypeFn, an: beTypeFn, above: aboveFn, below: belowFn, greaterThan: aboveFn, lessThan: belowFn } as ChainBe,
+    {
+      ok: { enumerable: true, get() { failIfNot(!!actual, `expected ${JSON.stringify(actual)} to be truthy`); } },
+      true: { enumerable: true, get() { failIfNot(actual === true, `expected ${JSON.stringify(actual)} to be true`); } },
+      false: { enumerable: true, get() { failIfNot(actual === false, `expected ${JSON.stringify(actual)} to be false`); } },
+      null: { enumerable: true, get() { failIfNot(actual === null, `expected ${JSON.stringify(actual)} to be null`); } },
+      undefined: { enumerable: true, get() { failIfNot(actual === undefined, `expected ${JSON.stringify(actual)} to be undefined`); } },
+      empty: {
+        enumerable: true,
+        get() {
+          let empty = false;
+          if (actual == null) empty = true;
+          else if (typeof actual === "string" || Array.isArray(actual))
+            empty = (actual as { length: number }).length === 0;
+          else if (typeof actual === "object")
+            empty = Object.keys(actual as object).length === 0;
+          failIfNot(empty, `expected ${JSON.stringify(actual)} to be empty`);
+        },
+      },
+    },
+  );
 
   const include = (expected: unknown) => {
     if (typeof actual === "string" && typeof expected === "string") {

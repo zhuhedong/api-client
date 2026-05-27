@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Plus,
-  Clock,
   FolderOpen,
   Trash2,
   FolderPlus,
@@ -21,20 +20,21 @@ import {
   Play,
   Braces,
   Server,
-  History,
-  FileText,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { useRequestStore } from "../store/useRequestStore";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { CookiesPanel } from "./CookiesPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { collectionToPostman, postmanToCollection } from "../utils/postman";
-import { openapiToCollection } from "../utils/openapi";
+import { openapiToCollection, exportOpenApi, openApiToMockRoutes } from "../utils/openapi";
 import { insomniaToCollections } from "../utils/insomnia";
 import { harToCollection } from "../utils/har";
 import { httpFileToCollection } from "../utils/http-file";
 import { CollectionAuthModal } from "./CollectionAuthModal";
 import { CollectionRunnerModal } from "./CollectionRunnerModal";
+import { SidebarHistoryTab } from "./SidebarHistoryTab";
+import { SidebarRecentTab } from "./SidebarRecentTab";
 import { VariableScopeModal } from "./VariableScopeModal";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { MockServerPanel } from "./MockServerPanel";
@@ -61,31 +61,14 @@ function isPostman(d: unknown): boolean {
   return !!r && typeof r.info?.schema === "string" && r.info.schema.includes("postman");
 }
 
-const METHOD_BADGE: Record<string, string> = {
-  GET: "bg-success/15 text-success",
-  POST: "bg-orange/15 text-orange",
-  PUT: "bg-accent/15 text-accent",
-  PATCH: "bg-purple/15 text-purple",
-  DELETE: "bg-error/15 text-error",
-  HEAD: "bg-text-tertiary/15 text-text-secondary",
-  OPTIONS: "bg-text-tertiary/15 text-text-secondary",
-};
-
-/** Format an epoch-ms timestamp as a coarse relative-time string. Used by
- *  the Recent Opened list — exact timestamps would clutter the sidebar
- *  and minute-level precision is rarely useful here. */
-function formatRelativeTime(ts: number, t: (k: string, opts?: Record<string, unknown>) => string): string {
-  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (diffSec < 60) return t("time.just_now");
-  if (diffSec < 3600) return t("time.minutes_ago", { n: Math.floor(diffSec / 60) });
-  if (diffSec < 86400) return t("time.hours_ago", { n: Math.floor(diffSec / 3600) });
-  return t("time.days_ago", { n: Math.floor(diffSec / 86400) });
-}
-
 export function Sidebar() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"history" | "collections" | "recent">("history");
-  const [searchQuery, setSearchQuery] = useState("");
+  // History search query lives here — not inside SidebarHistoryTab — so
+  // that switching to another tab and back doesn't clear the input
+  // while the store-level `history` array is still filtered (which
+  // would render an empty search box over a filtered list).
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
   const [showNewCollection, setShowNewCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [showEnvPanel, setShowEnvPanel] = useState(false);
@@ -100,6 +83,8 @@ export function Sidebar() {
   const [envSearch, setEnvSearch] = useState("");
   const [editingAuthCollectionId, setEditingAuthCollectionId] = useState<string | null>(null);
   const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
+  /** id of the collection whose export-format dropdown is currently open, or null. */
+  const [exportMenuColId, setExportMenuColId] = useState<string | null>(null);
   const [variableScope, setVariableScope] = useState<
     { kind: "global" } | { kind: "collection"; collectionId: string } | null
   >(null);
@@ -108,6 +93,9 @@ export function Sidebar() {
   // that changes the theme (Settings panel, future system listeners, etc.)
   // keeps this toggle in sync without manual wiring.
   const dark = useDarkMode();
+  // Drag-to-reorder state for the Collections tab. History has its own
+  // local instance inside SidebarHistoryTab — keeping them separate so
+  // dragging a history row doesn't also try to reorder a collection.
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const toggleDark = () => {
@@ -140,28 +128,19 @@ export function Sidebar() {
   }, []);
 
   const {
-    history,
     collections,
     environments,
     workspace,
-    recentItems,
     createNewRequest,
-    loadFromHistory,
-    deleteRequestFromHistory,
-    clearAllHistory,
-    searchHistory,
     addCollection,
     deleteCollection,
     renameCollection,
     addRequestToCollection,
-    loadRequestFromCollection,
-    reorderHistory,
     reorderCollections,
     importPostmanCollection,
     importCollections,
     setActiveEnvironment,
     activeRequestId,
-    clearRecent,
     refreshRecent,
   } = useRequestStore();
 
@@ -173,14 +152,23 @@ export function Sidebar() {
     }
   }, [activeTab, refreshRecent]);
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query.trim()) {
-      searchHistory(query.trim());
-    } else {
-      useRequestStore.getState().initialize();
-    }
-  };
+  // Reset the history filter when the workspace changes. `switchWorkspace`
+  // replaces the store's `history` array with the new workspace's full
+  // (unfiltered) history, but the search input is React local state and
+  // would otherwise keep showing the previous workspace's query —
+  // leaving the user with a stale "foo" in the box over an unfiltered
+  // list of the new workspace.
+  //
+  // Using the prev-ref pattern from
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  // rather than a useEffect — eslint's `react-hooks/set-state-in-effect`
+  // rule (correctly) flags the useEffect form as a cascading-render
+  // anti-pattern.
+  const prevWorkspaceIdRef = useRef(workspace?.id);
+  if (prevWorkspaceIdRef.current !== workspace?.id) {
+    prevWorkspaceIdRef.current = workspace?.id;
+    setHistorySearchQuery("");
+  }
 
   const handleAddCollection = async () => {
     const name = newCollectionName.trim();
@@ -246,18 +234,43 @@ export function Sidebar() {
     }
   };
 
-  const exportPostman = (colId: string) => {
-    const col = collections.find((c) => c.id === colId);
-    if (!col) return;
-    const data = collectionToPostman(col);
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
+  const downloadAsFile = (filename: string, content: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${col.name.replace(/[^a-z0-9-_ ]/gi, "_")}.postman_collection.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportPostman = (colId: string) => {
+    const col = collections.find((c) => c.id === colId);
+    if (!col) return;
+    const json = JSON.stringify(collectionToPostman(col), null, 2);
+    const safe = col.name.replace(/[^a-z0-9-_ ]/gi, "_");
+    downloadAsFile(`${safe}.postman_collection.json`, json, "application/json");
+  };
+
+  const exportAsOpenApi = (colId: string) => {
+    const col = collections.find((c) => c.id === colId);
+    if (!col) return;
+    const safe = col.name.replace(/[^a-z0-9-_ ]/gi, "_");
+    downloadAsFile(`${safe}.openapi.json`, exportOpenApi(col), "application/json");
+  };
+
+  const generateMocksFromOpenApi = async (colId: string) => {
+    const col = collections.find((c) => c.id === colId);
+    if (!col || !workspace?.id) return;
+    // Export this collection to OpenAPI in memory, then derive mock routes
+    // from the result. The user sees the new mocks immediately in the Mock
+    // Server panel.
+    const spec = exportOpenApi(col);
+    const routes = openApiToMockRoutes(spec);
+    for (const route of routes) {
+      await invoke("save_mock_route", { workspaceId: workspace.id, route });
+    }
+    setShowMockServer(true);
   };
 
   return (
@@ -388,85 +401,10 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {activeTab === "history" && (
-          <div>
-            {/* Search bar */}
-            <div className="px-0.5 pb-2">
-              <div className="relative">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder={t("common.search") + "…"}
-                  className="input-apple w-full text-[12px] py-[5px] pl-8 pr-7"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => handleSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary"
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-0.5">
-              {history.length === 0 && (
-                <div className="text-center py-12">
-                  <Clock size={28} className="mx-auto text-text-tertiary mb-2" strokeWidth={1.5} />
-                  <p className="text-text-tertiary text-[12px]">
-                    {searchQuery ? "No results found" : "No requests yet"}
-                  </p>
-                </div>
-              )}
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  draggable
-                  onDragStart={() => setDraggingId(item.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (draggingId) reorderHistory(draggingId, item.id);
-                    setDraggingId(null);
-                  }}
-                  onDragEnd={() => setDraggingId(null)}
-                  className={`group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-black/[0.04] active:bg-black/[0.06] cursor-pointer transition-colors ${activeRequestId === item.id ? "bg-accent/[0.07]" : ""}`}
-                  onClick={() => loadFromHistory(item.id)}
-                >
-                  <span
-                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${METHOD_BADGE[item.method] || ""}`}
-                  >
-                    {item.method}
-                  </span>
-                  <span className="text-[12px] text-text-secondary truncate flex-1">
-                    {(() => {
-                      try { return new URL(item.url).pathname; } catch { return item.url || "Untitled"; }
-                    })()}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteRequestFromHistory(item.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-error/10 rounded-md transition-all"
-                  >
-                    <Trash2 size={12} className="text-error/70" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {history.length > 0 && !searchQuery && (
-              <button
-                onClick={() => clearAllHistory()}
-                className="mt-3 w-full text-center text-[11px] text-text-tertiary hover:text-error transition-colors py-1.5"
-              >
-                Clear All History
-              </button>
-            )}
-          </div>
+          <SidebarHistoryTab
+            searchQuery={historySearchQuery}
+            setSearchQuery={setHistorySearchQuery}
+          />
         )}
 
         {activeTab === "collections" && (
@@ -632,16 +570,44 @@ export function Sidebar() {
                     >
                       <Play size={11} className="text-text-tertiary" />
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        exportPostman(collection.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all"
-                      title="Export as Postman v2.1"
-                    >
-                      <Download size={11} className="text-text-tertiary" />
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExportMenuColId(exportMenuColId === collection.id ? null : collection.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all"
+                        title={t("sidebar.export_collection")}
+                      >
+                        <Download size={11} className="text-text-tertiary" />
+                      </button>
+                      {exportMenuColId === collection.id && (
+                        <div
+                          className="absolute right-0 top-full mt-1 bg-bg-primary border border-border rounded-apple shadow-lg py-1 z-50 min-w-[180px]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => { exportPostman(collection.id); setExportMenuColId(null); }}
+                            className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 dark:hover:bg-white/10"
+                          >
+                            {t("sidebar.export_postman")}
+                          </button>
+                          <button
+                            onClick={() => { exportAsOpenApi(collection.id); setExportMenuColId(null); }}
+                            className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 dark:hover:bg-white/10"
+                          >
+                            {t("sidebar.export_openapi")}
+                          </button>
+                          <div className="border-t border-border my-1" />
+                          <button
+                            onClick={() => { generateMocksFromOpenApi(collection.id); setExportMenuColId(null); }}
+                            className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 dark:hover:bg-white/10"
+                          >
+                            {t("sidebar.generate_mocks")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -673,62 +639,7 @@ export function Sidebar() {
           </div>
         )}
 
-        {activeTab === "recent" && (
-          <div className="space-y-0.5">
-            {recentItems.length === 0 ? (
-              <div className="text-center py-12">
-                <History size={28} className="mx-auto text-text-tertiary mb-2" strokeWidth={1.5} />
-                <p className="text-text-tertiary text-[12px]">{t("sidebar.recent_empty")}</p>
-              </div>
-            ) : (
-              <>
-                {recentItems.map((item) => {
-                  const onClick = () => {
-                    if (item.item_type === "request") {
-                      // Items are stored as either "<collectionId>:<requestId>"
-                      // (recordRecent from loadRequestFromCollection) or
-                      // "history:<id>" (recordRecent from loadFromHistory).
-                      // Anything else is a legacy/external row and we just
-                      // skip it.
-                      const [scope, ...rest] = item.item_id.split(":");
-                      const rest_id = rest.join(":");
-                      if (scope === "history") {
-                        loadFromHistory(rest_id);
-                      } else if (scope && rest_id) {
-                        loadRequestFromCollection(scope, rest_id);
-                      }
-                    }
-                  };
-                  return (
-                    <div
-                      key={item.id}
-                      className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-black/[0.04] active:bg-black/[0.06] cursor-pointer transition-colors"
-                      onClick={onClick}
-                    >
-                      <FileText
-                        size={13}
-                        className="shrink-0 text-text-tertiary"
-                        strokeWidth={1.75}
-                      />
-                      <span className="text-[12px] text-text-secondary truncate flex-1">
-                        {item.name || t("common.untitled")}
-                      </span>
-                      <span className="text-[10px] text-text-tertiary shrink-0">
-                        {formatRelativeTime(item.opened_at, t)}
-                      </span>
-                    </div>
-                  );
-                })}
-                <button
-                  onClick={() => clearRecent()}
-                  className="mt-3 w-full text-center text-[11px] text-text-tertiary hover:text-error transition-colors py-1.5"
-                >
-                  {t("sidebar.recent_clear")}
-                </button>
-              </>
-            )}
-          </div>
-        )}
+        {activeTab === "recent" && <SidebarRecentTab />}
       </div>
 
       {showEnvPanel && <EnvironmentPanel onClose={() => setShowEnvPanel(false)} />}

@@ -415,3 +415,226 @@ pub async fn close_sse_stream(
         token.cancel();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper: feed a sequence of lines through process_line and return what
+    // the EventBuilder accumulated, *without* actually dispatching (since
+    // dispatch needs a real Tauri AppHandle which we can't fake in a unit
+    // test). Returns a vec of "synthetic events" reconstructed from the
+    // builder state at each dispatch boundary.
+    #[derive(Debug, PartialEq, Eq, Default)]
+    struct Frame {
+        event: Option<String>,
+        data: Option<String>,
+        last_id: Option<String>,
+        retry: Option<u64>,
+    }
+
+    fn parse(input: &str) -> Vec<Frame> {
+        let mut builder = EventBuilder::default();
+        let mut frames = Vec::new();
+        for line in input.split('\n') {
+            // Strip the optional CR so we can write tests with regular \n.
+            let line = line.trim_end_matches('\r');
+            let boundary = process_line(line, &mut builder);
+            if boundary {
+                // Mimic dispatch logic — only emit if at least one field set.
+                if !(builder.data.is_empty()
+                    && builder.event_type.is_none()
+                    && builder.retry.is_none())
+                {
+                    let data = if builder.data.is_empty() {
+                        None
+                    } else {
+                        Some(builder.data.join("\n"))
+                    };
+                    frames.push(Frame {
+                        event: builder.event_type.take(),
+                        data,
+                        last_id: builder.last_id.clone(),
+                        retry: builder.retry.take(),
+                    });
+                    builder.data.clear();
+                }
+            }
+        }
+        frames
+    }
+
+    #[test]
+    fn parses_simple_data_event() {
+        // Two data lines + dispatch boundary.
+        let frames = parse("data: hello\ndata: world\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].data, Some("hello\nworld".to_string()));
+        assert!(frames[0].event.is_none());
+        assert!(frames[0].retry.is_none());
+    }
+
+    #[test]
+    fn parses_event_type() {
+        let frames = parse("event: ping\ndata: pong\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].event, Some("ping".to_string()));
+        assert_eq!(frames[0].data, Some("pong".to_string()));
+    }
+
+    #[test]
+    fn carries_id_across_events() {
+        // `id` is sticky — once set, all subsequent dispatches inherit it
+        // until overridden, matching the EventSource spec.
+        let frames = parse("id: 42\ndata: a\n\ndata: b\n\n");
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].last_id, Some("42".to_string()));
+        assert_eq!(frames[1].last_id, Some("42".to_string()));
+    }
+
+    #[test]
+    fn ignores_id_with_null_byte() {
+        // Per spec, IDs containing NUL must be discarded.
+        let frames = parse("id: ok\ndata: first\n\nid: bad\0id\ndata: second\n\n");
+        assert_eq!(frames.len(), 2);
+        // Second event should still see the *previous* good ID, not "bad\0id".
+        assert_eq!(frames[1].last_id, Some("ok".to_string()));
+    }
+
+    #[test]
+    fn parses_retry_directive() {
+        let frames = parse("retry: 5000\ndata: hi\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].retry, Some(5000));
+    }
+
+    #[test]
+    fn ignores_invalid_retry() {
+        // Non-numeric retry is silently ignored per spec.
+        let frames = parse("retry: garbage\ndata: hi\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].retry, None);
+    }
+
+    #[test]
+    fn comment_lines_skipped() {
+        // Lines starting with ':' are comments (heartbeats). They should
+        // NOT count as a dispatch boundary and must NOT produce a frame.
+        let frames = parse(": ping\n: another\ndata: real\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].data, Some("real".to_string()));
+    }
+
+    #[test]
+    fn empty_dispatch_boundary_skipped() {
+        // A blank line with NO preceding fields is just whitespace —
+        // dispatch should not emit anything.
+        let frames = parse("\n\n\ndata: only\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].data, Some("only".to_string()));
+    }
+
+    #[test]
+    fn field_without_value() {
+        // `data` alone (no colon, no value) yields an empty-string data line
+        // per spec.
+        let frames = parse("data\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].data, Some("".to_string()));
+    }
+
+    #[test]
+    fn unknown_field_ignored() {
+        // Spec says unknown fields are silently discarded.
+        let frames = parse("foo: bar\ndata: ok\n\n");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].data, Some("ok".to_string()));
+    }
+
+    #[test]
+    fn single_leading_space_after_colon_stripped() {
+        // "data: hi" and "data:hi" must both yield data == "hi".
+        let frames = parse("data:hi\n\n");
+        assert_eq!(frames[0].data, Some("hi".to_string()));
+        let frames = parse("data: hi\n\n");
+        assert_eq!(frames[0].data, Some("hi".to_string()));
+        // But TWO leading spaces means the second space is part of the data.
+        let frames = parse("data:  hi\n\n");
+        assert_eq!(frames[0].data, Some(" hi".to_string()));
+    }
+
+    #[test]
+    fn multiline_data_joined_with_lf() {
+        // Per spec, multiple `data:` lines join with a literal \n.
+        let frames = parse("data: a\ndata: b\ndata: c\n\n");
+        assert_eq!(frames[0].data, Some("a\nb\nc".to_string()));
+    }
+
+    #[test]
+    fn process_line_returns_true_only_for_blank() {
+        let mut builder = EventBuilder::default();
+        assert!(process_line("", &mut builder));
+        assert!(!process_line("data: x", &mut builder));
+        assert!(!process_line(": comment", &mut builder));
+        assert!(!process_line("retry: 1000", &mut builder));
+    }
+
+    #[test]
+    fn payload_deserialize_defaults() {
+        // The TS layer omits verify_tls / timeout_ms for default-setting
+        // requests; serde defaults must produce None for both.
+        let json = r#"{"url":"https://x","headers":[],"request_id":"r1"}"#;
+        let payload: SseConnectPayload = serde_json::from_str(json).expect("parse");
+        assert_eq!(payload.url, "https://x");
+        assert_eq!(payload.request_id, "r1");
+        assert!(payload.verify_tls.is_none());
+        assert!(payload.timeout_ms.is_none());
+    }
+
+    #[test]
+    fn sse_event_omits_none_fields() {
+        // The `serde(skip_serializing_if = "Option::is_none")` rules keep
+        // the wire payload small; this test pins the contract because the
+        // frontend SsePanel depends on the shape.
+        let evt = SseEvent {
+            request_id: "r".to_string(),
+            kind: "open".to_string(),
+            event: None,
+            data: None,
+            id: None,
+            retry: None,
+            error: None,
+        };
+        let json = serde_json::to_string(&evt).expect("serialize");
+        // Should ONLY contain the two non-optional fields.
+        assert!(json.contains("\"request_id\":\"r\""));
+        assert!(json.contains("\"kind\":\"open\""));
+        assert!(!json.contains("event"));
+        assert!(!json.contains("data"));
+        assert!(!json.contains("retry"));
+    }
+
+    #[test]
+    fn cancellation_removes_token() {
+        // close_sse_stream must remove the token from the map even when
+        // called twice (second invocation is a no-op).
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt");
+        rt.block_on(async {
+            let connections = Arc::new(SseConnections::default());
+            let token = CancellationToken::new();
+            connections
+                .map
+                .lock()
+                .await
+                .insert("abc".to_string(), token.clone());
+            close_sse_stream(connections.clone(), "abc".to_string()).await;
+            assert!(token.is_cancelled());
+            assert!(!connections.map.lock().await.contains_key("abc"));
+            // Second close: must not panic.
+            close_sse_stream(connections.clone(), "abc".to_string()).await;
+        });
+    }
+}

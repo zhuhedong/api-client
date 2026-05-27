@@ -198,11 +198,11 @@ function buildPm(
         pending.delete(id);
         if (result.error) {
           const err = new Error(result.error);
-          if (cb) cb(err);
+          if (cb) { cb(err); resolve(undefined); return; }
           reject(err);
           return;
         }
-        if (cb) cb(null, result.response);
+        if (cb) { cb(null, result.response); resolve(result.response); return; }
         resolve(result.response);
       });
       (self as unknown as Worker).postMessage(outbound);

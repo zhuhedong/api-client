@@ -121,8 +121,21 @@ do glance at the warnings.
 
 - `#[forbid(unsafe_code)]` is the default mode; if you genuinely need
   `unsafe`, justify it in the PR.
-- Errors surface to the frontend as `Result<T, String>` from
-  `#[tauri::command]`s. Keep messages short and human-readable.
+- Errors surface to the frontend through two patterns:
+  - **`Result<T, String>`** — used by most `#[tauri::command]`s. Keep
+    messages short and human-readable. Suitable for CRUD-style commands
+    where the frontend just needs to display the message.
+  - **`Result<T, request_error::RequestError>`** — used by
+    request-execution commands (currently `send_request`). The error is
+    a structured `{ kind, code, message, retryable }` payload that lets
+    the frontend pattern-match against stable categories
+    (`Cancelled` / `Timeout` / `Dns` / `Connection` / `Tls` / `Proxy` /
+    `ClientCertificate` / `Input` / `Redirect` / `Body` / `Unknown`),
+    render a localized category title, and decide whether to show a
+    "Retry" button. Prefer this for any new command that performs
+    network I/O — see `src-tauri/src/request_error.rs` for the helpers
+    (`RequestError::input(...)`, `from_reqwest(...)`, etc.) and the
+    `classify_reqwest()` source-chain walker.
 - New commands go through the existing serde structs in `lib.rs` /
   `commands.rs` rather than ad-hoc maps.
 - Run `cargo clippy --no-deps -- -D warnings` locally; CI enforces it.

@@ -4,6 +4,7 @@ import type {
   CollectionFolder,
   CollectionRequest,
   KeyValue,
+  MockRoute,
 } from "../types";
 
 function genId(): string {
@@ -254,6 +255,13 @@ interface OpenApiOperation {
   tags?: string[];
   parameters?: OpenApiParameter[];
   requestBody?: { content?: Record<string, OpenApiMedia> };
+  /** Used by openApiToMockRoutes when generating mock responses. */
+  responses?: Record<string, OpenApiOperationResponse>;
+}
+
+interface OpenApiOperationResponse {
+  description?: string;
+  content?: Record<string, OpenApiMedia>;
 }
 
 interface OpenApiParameter {
@@ -278,4 +286,348 @@ interface OpenApiSchema {
   enum?: unknown[];
   items?: OpenApiSchema;
   properties?: Record<string, OpenApiSchema>;
+}
+
+// ============================================================================
+// Export: Collection → OpenAPI 3.0.3 JSON
+// ============================================================================
+
+interface ExportOpenApiInfo {
+  title: string;
+  description?: string;
+  version: string;
+}
+
+interface ExportOpenApiParameter {
+  name: string;
+  in: "query" | "path" | "header";
+  required?: boolean;
+  schema?: { type: string };
+}
+
+interface ExportOpenApiMediaType {
+  schema?: Record<string, unknown>;
+  example?: unknown;
+}
+
+interface ExportOpenApiRequestBody {
+  content: Record<string, ExportOpenApiMediaType>;
+}
+
+interface ExportOpenApiResponse {
+  description: string;
+  content?: Record<string, ExportOpenApiMediaType>;
+}
+
+interface ExportOpenApiOperation {
+  summary?: string;
+  operationId?: string;
+  parameters?: ExportOpenApiParameter[];
+  requestBody?: ExportOpenApiRequestBody;
+  responses: Record<string, ExportOpenApiResponse>;
+  tags?: string[];
+}
+
+type ExportOpenApiPathItem = Partial<Record<string, ExportOpenApiOperation>>;
+
+interface ExportOpenApiSpec {
+  openapi: string;
+  info: ExportOpenApiInfo;
+  paths: Record<string, ExportOpenApiPathItem>;
+  tags?: { name: string; description?: string }[];
+}
+
+function slugifyOperation(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+/** Extract the path component of a URL, normalizing :param / {{param}} to {param}. */
+function extractPath(url: string): string {
+  try {
+    const u = new URL(
+      url.startsWith("http")
+        ? url
+        : `http://x${url.startsWith("/") ? "" : "/"}${url}`,
+    );
+    return (
+      u.pathname
+        .split("/")
+        .map((seg) => {
+          if (seg.startsWith(":")) return `{${seg.slice(1)}}`;
+          if (seg.startsWith("{{") && seg.endsWith("}}"))
+            return `{${seg.slice(2, -2)}}`;
+          return seg;
+        })
+        .join("/") || "/"
+    );
+  } catch {
+    return url.startsWith("/") ? url : `/${url}`;
+  }
+}
+
+function guessSchemaType(value: string): string {
+  if (value === "true" || value === "false") return "boolean";
+  if (!isNaN(Number(value)) && value.trim() !== "") return "number";
+  return "string";
+}
+
+function bodyToRequestBody(
+  body: string,
+  bodyType: string,
+): ExportOpenApiRequestBody | undefined {
+  if (!body.trim()) return undefined;
+  const contentType =
+    bodyType === "json"
+      ? "application/json"
+      : bodyType === "xml"
+        ? "application/xml"
+        : bodyType === "form"
+          ? "application/x-www-form-urlencoded"
+          : "text/plain";
+
+  let example: unknown = undefined;
+  let schema: Record<string, unknown> | undefined = undefined;
+  if (bodyType === "json") {
+    try {
+      example = JSON.parse(body);
+      const t =
+        typeof example === "object" && example !== null
+          ? Array.isArray(example)
+            ? "array"
+            : "object"
+          : typeof example;
+      schema = { type: t };
+    } catch {
+      /* invalid JSON — fall through with no schema */
+    }
+  }
+  return {
+    content: {
+      [contentType]: {
+        ...(schema ? { schema } : {}),
+        ...(example !== undefined ? { example } : {}),
+      },
+    },
+  };
+}
+
+function requestToOperation(
+  req: CollectionRequest,
+  folderName?: string,
+): ExportOpenApiOperation {
+  const params: ExportOpenApiParameter[] = [];
+
+  // Query parameters
+  for (const p of req.params) {
+    if (!p.enabled || !p.key) continue;
+    params.push({
+      name: p.key,
+      in: "query",
+      schema: { type: guessSchemaType(p.value) },
+    });
+  }
+
+  // Path parameters extracted from the URL
+  const path = extractPath(req.url);
+  const pathParams = path.match(/\{([^}]+)\}/g) ?? [];
+  for (const pp of pathParams) {
+    const name = pp.slice(1, -1);
+    if (!params.find((p) => p.name === name && p.in === "path")) {
+      params.push({
+        name,
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      });
+    }
+  }
+
+  // Header parameters (skip Content-Type — it's implied by requestBody)
+  for (const h of req.headers) {
+    if (!h.enabled || !h.key) continue;
+    if (h.key.toLowerCase() === "content-type") continue;
+    params.push({ name: h.key, in: "header", schema: { type: "string" } });
+  }
+
+  const op: ExportOpenApiOperation = {
+    summary: req.name || undefined,
+    operationId: slugifyOperation(req.name || req.url),
+    responses: { "200": { description: "Successful response" } },
+  };
+  if (params.length > 0) op.parameters = params;
+  if (folderName) op.tags = [folderName];
+  const reqBody = bodyToRequestBody(req.body, req.body_type);
+  if (reqBody) op.requestBody = reqBody;
+  return op;
+}
+
+function flattenCollection(
+  col: Collection,
+): { req: CollectionRequest; folderName?: string }[] {
+  const out: { req: CollectionRequest; folderName?: string }[] = [];
+  for (const r of col.requests) out.push({ req: r });
+  function walk(folders: CollectionFolder[]) {
+    for (const f of folders) {
+      for (const r of f.requests) out.push({ req: r, folderName: f.name });
+      walk(f.folders);
+    }
+  }
+  walk(col.folders);
+  return out;
+}
+
+/**
+ * Export a Collection as an OpenAPI 3.0.3 JSON specification.
+ *
+ * - Folders become operation tags.
+ * - Query params, path params (extracted from `:name` / `{{name}}` segments),
+ *   and request headers become `parameters[]`.
+ * - JSON request bodies are parsed for examples and a coarse schema type.
+ * - The collection's name + description seed the `info` block.
+ */
+export function exportOpenApi(col: Collection): string {
+  const spec: ExportOpenApiSpec = {
+    openapi: "3.0.3",
+    info: {
+      title: col.name,
+      description: col.description || undefined,
+      version: "1.0.0",
+    },
+    paths: {},
+  };
+
+  const tags = new Set<string>();
+  for (const { req, folderName } of flattenCollection(col)) {
+    const path = extractPath(req.url);
+    const method = req.method.toLowerCase();
+    if (!spec.paths[path]) spec.paths[path] = {};
+    spec.paths[path][method] = requestToOperation(req, folderName);
+    if (folderName) tags.add(folderName);
+  }
+  if (tags.size > 0) spec.tags = [...tags].map((name) => ({ name }));
+
+  return JSON.stringify(spec, null, 2);
+}
+
+// ============================================================================
+// Import: OpenAPI → MockRoute[]
+// ============================================================================
+
+/** Convert OpenAPI `{name}` path params to the mock server's `:name` syntax. */
+function openApiPathToMockPath(path: string): string {
+  return path.replace(/\{([^}]+)\}/g, ":$1");
+}
+
+/**
+ * Generate `MockRoute[]` from an OpenAPI 3.x / Swagger 2.0 spec string.
+ *
+ * One MockRoute per operation. For each operation we pick the first 2xx
+ * response (falling back to the first response) and try, in order:
+ *   1. `content[ct].example`
+ *   2. `content[ct].examples[*].value`
+ *   3. A synthetic example derived from `content[ct].schema`
+ *
+ * If none of those exist, the route returns `{ message: <summary or "OK"> }`
+ * with `Content-Type: application/json` so the mock at least responds with
+ * something plausible.
+ */
+export function openApiToMockRoutes(specInput: string | object): MockRoute[] {
+  let spec: { paths?: Record<string, Record<string, OpenApiOperation>> };
+  try {
+    spec =
+      typeof specInput === "string"
+        ? (yaml.load(specInput) as typeof spec)
+        : (specInput as typeof spec);
+  } catch {
+    spec =
+      typeof specInput === "string"
+        ? (JSON.parse(specInput) as typeof spec)
+        : (specInput as typeof spec);
+  }
+  const routes: MockRoute[] = [];
+  const now = Date.now();
+  const methods = [
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "head",
+    "options",
+  ];
+
+  for (const [path, pathItem] of Object.entries(spec.paths ?? {})) {
+    for (const method of methods) {
+      const op = (pathItem as Record<string, OpenApiOperation | undefined>)[
+        method
+      ];
+      if (!op) continue;
+
+      const responseEntries = Object.entries(op.responses ?? {});
+      const successEntry =
+        responseEntries.find(([code]) => code.startsWith("2")) ??
+        responseEntries[0];
+      const status = successEntry ? parseInt(successEntry[0], 10) || 200 : 200;
+      const responseObj = successEntry?.[1];
+
+      let body = "";
+      const headers: KeyValue[] = [];
+      if (responseObj?.content) {
+        const contentEntries = Object.entries(responseObj.content);
+        const [contentType, media] = contentEntries[0] ?? [];
+        if (contentType) {
+          headers.push({
+            id: genId(),
+            key: "Content-Type",
+            value: contentType,
+            enabled: true,
+          });
+        }
+        if (media?.example !== undefined) {
+          body =
+            typeof media.example === "string"
+              ? media.example
+              : JSON.stringify(media.example, null, 2);
+        } else if (media?.examples) {
+          const first = Object.values(media.examples)[0];
+          if (first?.value !== undefined) {
+            body =
+              typeof first.value === "string"
+                ? first.value
+                : JSON.stringify(first.value, null, 2);
+          }
+        } else if (media?.schema) {
+          const sample = sampleFromSchema(media.schema);
+          body =
+            typeof sample === "string"
+              ? sample
+              : JSON.stringify(sample, null, 2);
+        }
+      }
+      if (!body) {
+        if (headers.length === 0) {
+          headers.push({
+            id: genId(),
+            key: "Content-Type",
+            value: "application/json",
+            enabled: true,
+          });
+        }
+        body = JSON.stringify({ message: op.summary ?? "OK" });
+      }
+
+      routes.push({
+        id: genId(),
+        method: method.toUpperCase(),
+        path: openApiPathToMockPath(path),
+        status,
+        headers,
+        body,
+        enabled: true,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  }
+  return routes;
 }

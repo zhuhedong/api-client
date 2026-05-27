@@ -158,6 +158,49 @@ pub struct AuthConfig {
     /// AWS service name (e.g. "s3", "execute-api", "dynamodb").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aws_service: Option<String>,
+
+    // HTTP Digest — populated only when auth_type == "digest".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest_username: Option<String>,
+    /// Stored in keychain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest_password: Option<String>,
+
+    // OAuth 1.0a — populated only when auth_type == "oauth1".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_consumer_key: Option<String>,
+    /// Stored in keychain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_consumer_secret: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_token: Option<String>,
+    /// Stored in keychain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_token_secret: Option<String>,
+    /// "HMAC-SHA1" | "HMAC-SHA256" | "PLAINTEXT"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_signature_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_realm: Option<String>,
+    /// "header" | "query"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth1_add_to: Option<String>,
+
+    // JWT signer — populated only when auth_type == "jwt".
+    /// "HS256" | "HS384" | "HS512"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jwt_algorithm: Option<String>,
+    /// Stored in keychain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jwt_secret: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jwt_secret_is_base64: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jwt_payload: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jwt_request_header: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jwt_header_prefix: Option<String>,
 }
 
 // === Environment Types ===
@@ -234,6 +277,10 @@ const AUTH_OAUTH2_PASSWORD: &str = "oauth2_password";
 const AUTH_OAUTH2_ACCESS_TOKEN: &str = "oauth2_access_token";
 const AUTH_AWS_SECRET_KEY: &str = "aws_secret_access_key";
 const AUTH_AWS_SESSION_TOKEN: &str = "aws_session_token";
+const AUTH_DIGEST_PASSWORD: &str = "digest_password";
+const AUTH_OAUTH1_CONSUMER_SECRET: &str = "oauth1_consumer_secret";
+const AUTH_OAUTH1_TOKEN_SECRET: &str = "oauth1_token_secret";
+const AUTH_JWT_SECRET: &str = "jwt_secret";
 
 fn sanitize_auth(auth: &mut Option<AuthConfig>, scope_id: &str) {
     let Some(a) = auth.as_mut() else { return };
@@ -305,6 +352,38 @@ fn sanitize_auth(auth: &mut Option<AuthConfig>, scope_id: &str) {
         }
         a.aws_session_token = Some(String::new());
     }
+    if let Some(v) = a.digest_password.as_deref() {
+        if !v.is_empty() {
+            let _ = secrets::store_auth_secret(scope_id, AUTH_DIGEST_PASSWORD, v);
+        } else {
+            let _ = secrets::delete_auth_secret(scope_id, AUTH_DIGEST_PASSWORD);
+        }
+        a.digest_password = Some(String::new());
+    }
+    if let Some(v) = a.oauth1_consumer_secret.as_deref() {
+        if !v.is_empty() {
+            let _ = secrets::store_auth_secret(scope_id, AUTH_OAUTH1_CONSUMER_SECRET, v);
+        } else {
+            let _ = secrets::delete_auth_secret(scope_id, AUTH_OAUTH1_CONSUMER_SECRET);
+        }
+        a.oauth1_consumer_secret = Some(String::new());
+    }
+    if let Some(v) = a.oauth1_token_secret.as_deref() {
+        if !v.is_empty() {
+            let _ = secrets::store_auth_secret(scope_id, AUTH_OAUTH1_TOKEN_SECRET, v);
+        } else {
+            let _ = secrets::delete_auth_secret(scope_id, AUTH_OAUTH1_TOKEN_SECRET);
+        }
+        a.oauth1_token_secret = Some(String::new());
+    }
+    if let Some(v) = a.jwt_secret.as_deref() {
+        if !v.is_empty() {
+            let _ = secrets::store_auth_secret(scope_id, AUTH_JWT_SECRET, v);
+        } else {
+            let _ = secrets::delete_auth_secret(scope_id, AUTH_JWT_SECRET);
+        }
+        a.jwt_secret = Some(String::new());
+    }
 }
 
 fn hydrate_auth(auth: &mut Option<AuthConfig>, scope_id: &str) {
@@ -349,6 +428,26 @@ fn hydrate_auth(auth: &mut Option<AuthConfig>, scope_id: &str) {
             a.aws_session_token = Some(v);
         }
     }
+    if a.digest_password.as_deref().is_none_or(str::is_empty) {
+        if let Ok(Some(v)) = secrets::get_auth_secret(scope_id, AUTH_DIGEST_PASSWORD) {
+            a.digest_password = Some(v);
+        }
+    }
+    if a.oauth1_consumer_secret.as_deref().is_none_or(str::is_empty) {
+        if let Ok(Some(v)) = secrets::get_auth_secret(scope_id, AUTH_OAUTH1_CONSUMER_SECRET) {
+            a.oauth1_consumer_secret = Some(v);
+        }
+    }
+    if a.oauth1_token_secret.as_deref().is_none_or(str::is_empty) {
+        if let Ok(Some(v)) = secrets::get_auth_secret(scope_id, AUTH_OAUTH1_TOKEN_SECRET) {
+            a.oauth1_token_secret = Some(v);
+        }
+    }
+    if a.jwt_secret.as_deref().is_none_or(str::is_empty) {
+        if let Ok(Some(v)) = secrets::get_auth_secret(scope_id, AUTH_JWT_SECRET) {
+            a.jwt_secret = Some(v);
+        }
+    }
 }
 
 fn purge_auth(auth: &Option<AuthConfig>, scope_id: &str) {
@@ -361,6 +460,10 @@ fn purge_auth(auth: &Option<AuthConfig>, scope_id: &str) {
         let _ = secrets::delete_auth_secret(scope_id, AUTH_OAUTH2_ACCESS_TOKEN);
         let _ = secrets::delete_auth_secret(scope_id, AUTH_AWS_SECRET_KEY);
         let _ = secrets::delete_auth_secret(scope_id, AUTH_AWS_SESSION_TOKEN);
+        let _ = secrets::delete_auth_secret(scope_id, AUTH_DIGEST_PASSWORD);
+        let _ = secrets::delete_auth_secret(scope_id, AUTH_OAUTH1_CONSUMER_SECRET);
+        let _ = secrets::delete_auth_secret(scope_id, AUTH_OAUTH1_TOKEN_SECRET);
+        let _ = secrets::delete_auth_secret(scope_id, AUTH_JWT_SECRET);
     }
 }
 
