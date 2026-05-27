@@ -23,6 +23,11 @@ import {
 } from "../utils/historySnapshot";
 import { refreshOAuth2Token, updateFolderAuth } from "../utils/oauth2Refresh";
 import {
+  applyVarMutations,
+  diffVarMutations,
+  hasVarMutations,
+} from "../utils/variableMutations";
+import {
   createNewRequest,
   findRequestInCollection,
   generateId,
@@ -319,99 +324,63 @@ export const useRequestStore = create<RequestState>((set, get) => {
         return;
       }
 
-      // Persist global-scope mutations (pm.globals.set/unset). Diff against
-      // the pre-script baseline so we only touch what the script actually
-      // changed.
+      // Persist global-scope mutations (pm.globals.set/unset). Diff
+      // against the pre-script baseline so we only touch what the
+      // script actually changed.
       if (state.workspace) {
-        const globalChanges: Record<string, string> = {};
-        for (const [k, v] of Object.entries(globalVars)) {
-          if (globalBaseline[k] !== v) globalChanges[k] = v;
-        }
-        const globalDeletions = Object.keys(globalBaseline).filter(
-          (k) => !(k in globalVars),
-        );
-        if (Object.keys(globalChanges).length > 0 || globalDeletions.length > 0) {
-          const prev = state.workspace.variables ?? [];
-          const nextVars = prev
-            .filter((v) => !v.enabled || !v.key || !globalDeletions.includes(v.key))
-            .map((v) =>
-              v.enabled && v.key && v.key in globalChanges
-                ? { ...v, value: globalChanges[v.key] }
-                : v,
-            );
-          for (const k of Object.keys(globalChanges)) {
-            if (!prev.some((v) => v.key === k)) {
-              nextVars.push({ key: k, value: globalChanges[k], enabled: true, is_secret: false });
-            }
-          }
+        const diff = diffVarMutations(globalBaseline, globalVars);
+        if (hasVarMutations(diff)) {
+          const nextVars = applyVarMutations(
+            state.workspace.variables ?? [],
+            diff,
+          );
           get()
             .setGlobalVariables(nextVars)
-            .catch((e) => console.error("Failed to persist global var mutations:", e));
+            .catch((e) =>
+              console.error("Failed to persist global var mutations:", e),
+            );
         }
       }
 
       // Persist collection-scope mutations (pm.collectionVariables.set/unset).
       if (owningCollection) {
-        const colChanges: Record<string, string> = {};
-        for (const [k, v] of Object.entries(collectionVars)) {
-          if (collectionBaseline[k] !== v) colChanges[k] = v;
-        }
-        const colDeletions = Object.keys(collectionBaseline).filter(
-          (k) => !(k in collectionVars),
-        );
-        if (Object.keys(colChanges).length > 0 || colDeletions.length > 0) {
-          const prev = owningCollection.variables ?? [];
-          const nextVars = prev
-            .filter((v) => !v.enabled || !v.key || !colDeletions.includes(v.key))
-            .map((v) =>
-              v.enabled && v.key && v.key in colChanges
-                ? { ...v, value: colChanges[v.key] }
-                : v,
-            );
-          for (const k of Object.keys(colChanges)) {
-            if (!prev.some((v) => v.key === k)) {
-              nextVars.push({ key: k, value: colChanges[k], enabled: true, is_secret: false });
-            }
-          }
+        const diff = diffVarMutations(collectionBaseline, collectionVars);
+        if (hasVarMutations(diff)) {
+          const nextVars = applyVarMutations(
+            owningCollection.variables ?? [],
+            diff,
+          );
           get()
             .setCollectionVariables(owningCollection.id, nextVars)
-            .catch((e) => console.error("Failed to persist collection var mutations:", e));
+            .catch((e) =>
+              console.error(
+                "Failed to persist collection var mutations:",
+                e,
+              ),
+            );
         }
       }
 
-      // Persist script-induced mutations to the env layer only. Script writes
-      // are diffed against the pre-script `baseline`, so changes coming from
-      // the global / collection / folder layers don't leak into env. Deletions
-      // are only honored for keys that originally lived in env (we can't
-      // delete from lower scopes through a script).
+      // Persist script-induced mutations to the env layer only. The
+      // ownable-keys set restricts deletions to keys actually present
+      // on the active environment, so removals via `pm.environment.unset`
+      // can't reach keys merged in from lower (global/collection/folder)
+      // scopes.
       if (activeEnv) {
-        const changes: Record<string, string> = {};
-        for (const [k, v] of Object.entries(envVars)) {
-          if (baseline[k] !== v) changes[k] = v;
-        }
         const envKeys = new Set(
-          activeEnv.variables.filter((v) => v.enabled && v.key).map((v) => v.key)
+          activeEnv.variables
+            .filter((v) => v.enabled && v.key)
+            .map((v) => v.key),
         );
-        const deletions = Object.keys(baseline).filter(
-          (k) => !(k in envVars) && envKeys.has(k)
-        );
-        if (Object.keys(changes).length > 0 || deletions.length > 0) {
-          const nextVars = activeEnv.variables
-            .filter((v) => !v.enabled || !v.key || !deletions.includes(v.key))
-            .map((v) =>
-              v.enabled && v.key && v.key in changes
-                ? { ...v, value: changes[v.key] }
-                : v
-            );
-          for (const k of Object.keys(changes)) {
-            if (!activeEnv.variables.some((v) => v.key === k)) {
-              nextVars.push({ key: k, value: changes[k], enabled: true, is_secret: false });
-            }
-          }
+        const diff = diffVarMutations(baseline, envVars, envKeys);
+        if (hasVarMutations(diff)) {
+          const nextVars = applyVarMutations(activeEnv.variables, diff);
           // Fire-and-forget so a save failure doesn't mask the response.
           get()
             .updateEnvironment({ ...activeEnv, variables: nextVars })
-            .catch((e) => console.error("Failed to persist env mutations:", e));
+            .catch((e) =>
+              console.error("Failed to persist env mutations:", e),
+            );
         }
       }
 

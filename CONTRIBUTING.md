@@ -86,7 +86,7 @@ Before opening a PR, run:
 ```sh
 npm run typecheck                       # tsc --noEmit
 npm run lint                            # eslint --max-warnings 0
-npm test                                # vitest run
+npm test                                # tsc --noEmit + vitest run
 npm run build                           # tsc + vite build
 npm run test:e2e                        # Playwright (browser, mocked IPC)
 

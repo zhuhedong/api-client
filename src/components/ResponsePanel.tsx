@@ -827,7 +827,7 @@ interface TimingPillProps {
 /**
  * Time chip rendered in the response status bar. Shows total ms inline,
  * reveals a wait/download breakdown on hover (only when the backend
- * supplied one — responses persisted before this PR don't have it).
+ * supplied one — legacy persisted responses may omit it).
  */
 function TimingPill({ timeMs, timings }: TimingPillProps) {
   const [open, setOpen] = useState(false);

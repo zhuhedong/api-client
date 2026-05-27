@@ -6,11 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "pretest": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

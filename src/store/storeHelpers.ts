@@ -1,8 +1,8 @@
 /**
- * Pure helper functions extracted from `useRequestStore.ts`.
+ * Pure helper functions for the request store.
  *
- * Keeping these in a dedicated module keeps the store body focused on
- * state shape + Zustand actions, and makes the helpers individually
+ * Living in a dedicated module keeps the store body focused on state
+ * shape + Zustand actions, and makes the helpers individually
  * unit-testable. Everything here is a pure function — no calls to
  * `useRequestStore.getState()`, no `invoke(...)`, no DOM access.
  */
