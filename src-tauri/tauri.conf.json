@@ -1,6 +1,6 @@
 {
   "productName": "API Client",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "identifier": "com.apiclient.dev",
   "build": {
     "beforeDevCommand": "npm run dev",
