@@ -27,8 +27,8 @@
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "@uiw/react-codemirror": "^4.25.10",
-    "i18next": "^26.2.0",
-    "js-yaml": "^4.1.1",
+    "i18next": "^26.3.0",
+    "js-yaml": "^4.2.0",
     "lucide-react": "^0.400.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -53,7 +53,7 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.2",
-    "typescript-eslint": "^8.60.0",
+    "typescript-eslint": "^8.60.1",
     "vite": "^5.3.1",
     "vitest": "^2.1.9"
   }
