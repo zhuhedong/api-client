@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import { resolveAuth } from "./auth";
 import { runScript } from "./scriptRunner";
+import { findFolderChain } from "./variableScope";
 import { substituteAll } from "./dynamicVars";
 import { signSigV4 } from "./sigv4";
 import { signJwt } from "./jwt";
@@ -29,6 +30,8 @@ export interface PipelineDefaults {
   defaultMaxRedirects?: number;
   /** Default proxy URL. Empty string = no proxy. */
   defaultProxyUrl?: string;
+  /** When true, every send opts into the DNS/TCP/TLS connection probe. */
+  profileTiming?: boolean;
 }
 
 /** Subset of the request store that holds pipeline defaults. We accept
@@ -41,6 +44,7 @@ export interface PipelineDefaultsSource {
   defaultRedirectPolicy: "follow" | "none" | "manual";
   defaultMaxRedirects: number;
   defaultProxyUrl: string;
+  profileTiming: boolean;
 }
 
 /** Build a `PipelineDefaults` from the store. Centralizing the field list
@@ -58,6 +62,7 @@ export function pipelineDefaultsFrom(
     defaultRedirectPolicy: source.defaultRedirectPolicy,
     defaultMaxRedirects: source.defaultMaxRedirects,
     defaultProxyUrl: source.defaultProxyUrl,
+    profileTiming: source.profileTiming,
   };
 }
 
@@ -233,6 +238,14 @@ export async function buildSendPayload(
         is_file: !!f.is_file,
         file_path: f.file_path,
       }));
+  } else if (req.bodyType === "x-www-form-urlencoded") {
+    // Reuses the form-data rows; the backend URL-encodes them via reqwest's
+    // `.form()`. Substitute variables in keys and values.
+    formData = req.formData
+      .filter((f) => f.enabled && f.key)
+      .map((f) => ({ key: sub(f.key), value: sub(f.value), enabled: f.enabled }));
+  } else if (req.bodyType === "binary") {
+    // Raw file body: the backend reads `binary_file_path`; nothing to assemble.
   } else if (req.bodyType === "graphql") {
     bodyStr = JSON.stringify({
       query: sub(req.graphqlQuery || ""),
@@ -305,6 +318,9 @@ export async function buildSendPayload(
     body: bodyStr,
     body_type: req.bodyType !== "none" ? req.bodyType : null,
     form_data: formData,
+    binary_file_path:
+      req.bodyType === "binary" ? req.binaryFilePath ?? null : null,
+    measure_timing: defaults.profileTiming ? true : null,
     timeout_ms: req.timeoutMs ?? defaults.defaultTimeoutMs,
     request_id: req.id,
     verify_tls: req.verifyTls ?? defaults.verifyTlsDefault,
@@ -328,6 +344,21 @@ export async function buildSendPayload(
   };
 
   return { finalUrl, headers, bodyStr, payload };
+}
+
+/** Fetch the cookie jar as a flat name→value map for `pm.cookies`. Best-effort
+ *  — a failure yields an empty jar rather than aborting the request. */
+async function fetchCookieMap(): Promise<Record<string, string>> {
+  try {
+    const list = await invoke<{ name: string; value: string }[]>(
+      "get_all_cookies",
+    );
+    const map: Record<string, string> = {};
+    for (const c of list) map[c.name] = c.value;
+    return map;
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -365,39 +396,109 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
     }
   };
 
-  // --- Pre-request script -----------------------------------------------------
-  if (req.preScript && req.preScript.trim()) {
+  const tests: TestResult[] = [];
+  const scriptInfo = { requestName: req.name, requestId: req.id };
+
+  /** Run one script and merge its results — logs, tests, scope mutations,
+   *  errors — back into the shared pipeline state. Errors are prefixed with
+   *  `label` so the user can tell collection / folder / request scripts apart. */
+  const runAndAdopt = async (
+    kind: "pre" | "test",
+    label: string,
+    source: string,
+    snapshot: {
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body: string;
+    },
+    response?: ResponseData,
+    cookies?: Record<string, string>,
+  ) => {
     try {
-      const pre = await runScript({
-        kind: "pre",
-        source: req.preScript,
-        request: {
-          method: req.method,
-          url: req.url,
-          headers: Object.fromEntries(
-            req.headers.filter((h) => h.enabled).map((h) => [h.key, h.value])
-          ),
-          body: req.body || "",
-        },
+      const r = await runScript({
+        kind,
+        source,
+        request: snapshot,
+        response,
         environment: envVars,
         globals,
         collectionVariables: collectionScope,
         variables: transientVars,
         iterationData: iterationData ?? {},
+        cookies,
+        info: scriptInfo,
       });
-      logs.push(...pre.logs);
-      if (!pre.ok && pre.error) {
-        scriptError = `Pre-request: ${pre.error}`;
+      logs.push(...r.logs);
+      if (kind === "test") tests.push(...r.tests);
+      if (!r.ok && r.error) {
+        scriptError = scriptError
+          ? `${scriptError}; ${label}: ${r.error}`
+          : `${label}: ${r.error}`;
       }
-      adopt(envVars, pre.environment);
-      adopt(globals, pre.globals);
-      adopt(collectionScope, pre.collectionVariables);
-      adopt(transientVars, pre.variables);
+      adopt(envVars, r.environment);
+      adopt(globals, r.globals);
+      adopt(collectionScope, r.collectionVariables);
+      adopt(transientVars, r.variables);
     } catch (e) {
-      // Worker spawn / import failures must not abort the request pipeline —
-      // surface as a script error and continue with unmodified env/vars.
-      scriptError = `Pre-request: ${e instanceof Error ? e.message : String(e)}`;
+      const msg = `${label}: ${e instanceof Error ? e.message : String(e)}`;
+      scriptError = scriptError ? `${scriptError}; ${msg}` : msg;
     }
+  };
+
+  // Resolve collection- and folder-level scripts wrapping this request. Pre
+  // runs outer→inner (collection, folders top-down, then the request); test
+  // runs inner→outer (request, folders bottom-up, then the collection) so the
+  // collection brackets everything beneath it as setup / teardown.
+  const owningCollection = req.collectionId
+    ? collections.find((c) => c.id === req.collectionId)
+    : undefined;
+  const folderChain = owningCollection
+    ? findFolderChain(owningCollection.folders, req.id, [])
+    : null;
+
+  const preScripts: { label: string; source: string }[] = [];
+  if (owningCollection?.pre_script?.trim())
+    preScripts.push({
+      label: "Collection pre-request",
+      source: owningCollection.pre_script,
+    });
+  for (const f of folderChain ?? [])
+    if (f.pre_script?.trim())
+      preScripts.push({
+        label: `Folder pre-request (${f.name})`,
+        source: f.pre_script,
+      });
+  if (req.preScript?.trim())
+    preScripts.push({ label: "Pre-request", source: req.preScript });
+
+  const testScripts: { label: string; source: string }[] = [];
+  if (req.testScript?.trim())
+    testScripts.push({ label: "Test", source: req.testScript });
+  for (const f of [...(folderChain ?? [])].reverse())
+    if (f.test_script?.trim())
+      testScripts.push({
+        label: `Folder test (${f.name})`,
+        source: f.test_script,
+      });
+  if (owningCollection?.post_script?.trim())
+    testScripts.push({
+      label: "Collection post-response",
+      source: owningCollection.post_script,
+    });
+
+  // --- Pre-request scripts (collection → folders → request) ------------------
+  const preSnapshot = {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(
+      req.headers.filter((h) => h.enabled).map((h) => [h.key, h.value]),
+    ),
+    body: req.body || "",
+  };
+  const preCookies = preScripts.length ? await fetchCookieMap() : undefined;
+  for (const s of preScripts) {
+    await runAndAdopt("pre", s.label, s.source, preSnapshot, undefined, preCookies);
   }
 
   // --- Send -------------------------------------------------------------------
@@ -449,38 +550,17 @@ export async function executeRequestWithScripts(input: PipelineInput): Promise<P
     error = toRequestError(e);
   }
 
-  // --- Post-response (test) script -------------------------------------------
-  let tests: TestResult[] = [];
-  if (response && req.testScript && req.testScript.trim()) {
-    try {
-      const post = await runScript({
-        kind: "test",
-        source: req.testScript,
-        request: {
-          method: req.method,
-          url: finalUrl,
-          headers: headerMap,
-          body: bodyStr || "",
-        },
-        response,
-        environment: envVars,
-        globals,
-        collectionVariables: collectionScope,
-        variables: transientVars,
-        iterationData: iterationData ?? {},
-      });
-      logs.push(...post.logs);
-      tests = post.tests;
-      if (!post.ok && post.error) {
-        scriptError = scriptError ? `${scriptError}; Test: ${post.error}` : `Test: ${post.error}`;
-      }
-      adopt(envVars, post.environment);
-      adopt(globals, post.globals);
-      adopt(collectionScope, post.collectionVariables);
-      adopt(transientVars, post.variables);
-    } catch (e) {
-      const msg = `Test: ${e instanceof Error ? e.message : String(e)}`;
-      scriptError = scriptError ? `${scriptError}; ${msg}` : msg;
+  // --- Test scripts (request → folders → collection) -------------------------
+  if (response) {
+    const testSnapshot = {
+      method: req.method,
+      url: finalUrl,
+      headers: headerMap,
+      body: bodyStr || "",
+    };
+    const testCookies = testScripts.length ? await fetchCookieMap() : undefined;
+    for (const s of testScripts) {
+      await runAndAdopt("test", s.label, s.source, testSnapshot, response, testCookies);
     }
   }
 

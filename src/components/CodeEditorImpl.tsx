@@ -6,6 +6,7 @@ import { xml } from "@codemirror/lang-xml";
 import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
+import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
 import { useDarkMode } from "../utils/useDarkMode";
 import type { CodeEditorProps, CodeLanguage } from "./CodeEditor";
 
@@ -39,6 +40,48 @@ function langExtension(language: CodeLanguage) {
   }
 }
 
+/** Combined completion source: `{{variable}}` suggestions after `{{`, plus
+ *  (when a GraphQL schema was fetched) flat type/field-name completion on bare
+ *  identifiers. The GraphQL side is best-effort — name matching, not
+ *  grammar-aware — since `codemirror-graphql` can't be pulled offline. */
+function buildCompletionSource(vars: string[], graphqlFields?: string[]) {
+  return (context: CompletionContext) => {
+    const before = context.matchBefore(/\{\{[\w$.-]*/);
+    if (before) {
+      if (before.from === before.to && !context.explicit) return null;
+      const typed = before.text.slice(2).toLowerCase();
+      const matches = vars.filter((n) => n.toLowerCase().includes(typed));
+      if (matches.length === 0) return null;
+      // Avoid emitting a second `}}` when the cursor already sits before one.
+      const after = context.state.sliceDoc(context.pos, context.pos + 2);
+      const closing = after === "}}" ? "" : "}}";
+      return {
+        from: before.from + 2, // keep the leading "{{"
+        to: context.pos,
+        options: matches.map((name) => ({
+          label: name,
+          type: "variable",
+          apply: name + closing,
+        })),
+      };
+    }
+    if (graphqlFields && graphqlFields.length > 0) {
+      const word = context.matchBefore(/[A-Za-z_][A-Za-z0-9_]*$/);
+      if (!word || (word.from === word.to && !context.explicit)) return null;
+      const typed = word.text.toLowerCase();
+      const matches = graphqlFields
+        .filter((f) => f.toLowerCase().includes(typed))
+        .slice(0, 50);
+      if (matches.length === 0) return null;
+      return {
+        from: word.from,
+        options: matches.map((name) => ({ label: name, type: "property" })),
+      };
+    }
+    return null;
+  };
+}
+
 /**
  * Concrete CodeMirror 6 implementation. Imported lazily by `CodeEditor`
  * so the ~600 kB CodeMirror chunk is split out of the initial bundle.
@@ -58,9 +101,24 @@ export default function CodeEditorImpl({
   readOnly = false,
   autoFocus = false,
   className,
+  completions,
+  graphqlFields,
 }: CodeEditorProps) {
   const isDark = useDarkMode();
-  const extensions = useMemo(() => [...baseExtensions, ...langExtension(language)], [language]);
+  const extensions = useMemo(() => {
+    const exts = [...baseExtensions, ...langExtension(language)];
+    if (
+      (completions && completions.length > 0) ||
+      (graphqlFields && graphqlFields.length > 0)
+    ) {
+      exts.push(
+        autocompletion({
+          override: [buildCompletionSource(completions ?? [], graphqlFields)],
+        }),
+      );
+    }
+    return exts;
+  }, [language, completions, graphqlFields]);
 
   const containerStyle =
     height === "auto"
@@ -70,7 +128,7 @@ export default function CodeEditorImpl({
   return (
     <div
       style={containerStyle}
-      className={`rounded-apple border border-border-light overflow-hidden bg-surface ${className ?? ""}`}
+      className={`rounded-lg border border-border overflow-hidden bg-card ${className ?? ""}`}
     >
       <CodeMirror
         value={value}

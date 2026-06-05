@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRequestStore } from "../store/useRequestStore";
@@ -48,28 +51,31 @@ export function SsePanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-2 flex items-center gap-2 border-b border-border-light">
+      <div className="px-4 py-2 flex items-center gap-2 border-b border-border">
         <span
-          className={`w-2 h-2 rounded-full ${connected ? "bg-success" : "bg-text-tertiary"}`}
+          className={`w-2 h-2 rounded-full ${connected ? "bg-success" : "bg-muted-foreground"}`}
         />
-        <span className="text-[12px] text-text-secondary">
+        <span className="text-[12px] text-muted-foreground">
           {connected ? t("sse.connected") : t("sse.disconnected")}
         </span>
-        <span className="text-[11px] text-text-tertiary">
+        <span className="text-[11px] text-muted-foreground">
           {t("sse.event_count", { count: messageCount })}
         </span>
-        <input
+        <Input
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder={t("sse.filter_placeholder")}
-          className="input-apple flex-1 !py-1 !text-[11px] max-w-xs"
+          className="h-7 max-w-xs flex-1 !text-[11px]"
         />
-        <label className="text-[11px] text-text-tertiary flex items-center gap-1 select-none">
-          <input
-            type="checkbox"
+        <label
+          htmlFor="sse-autoscroll"
+          className="text-[11px] text-muted-foreground flex items-center gap-1 select-none cursor-pointer"
+        >
+          <Checkbox
+            id="sse-autoscroll"
             checked={autoScroll}
-            onChange={(e) => setAutoScroll(e.target.checked)}
+            onCheckedChange={(c) => setAutoScroll(c === true)}
           />
           {t("sse.follow")}
         </label>
@@ -82,23 +88,24 @@ export function SsePanel() {
                 sseEvents: { ...s.sseEvents, [reqId]: [] },
               }));
             }}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 active:bg-black/8 transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent transition-colors"
             title={t("sse.clear_log")}
           >
-            <Trash2 size={14} className="text-text-tertiary" />
+            <Trash2 size={14} className="text-muted-foreground" />
           </button>
           {!connected ? (
-            <button
+            <Button
+              size="sm"
               onClick={() => sseConnect()}
               disabled={!activeRequest.url}
-              className="btn-send !py-1 !px-3 !text-[12px]"
+              className="!px-3 !py-1 !text-[12px]"
             >
               {t("sse.connect")}
-            </button>
+            </Button>
           ) : (
             <button
               onClick={() => sseClose()}
-              className="px-3 py-1 bg-error text-white font-medium rounded-apple text-[12px] hover:bg-error/90 active:scale-[0.97] transition-all"
+              className="px-3 py-1 bg-destructive text-white font-medium rounded-lg text-[12px] hover:bg-destructive/90 active:scale-[0.97] transition-all"
             >
               {t("sse.disconnect")}
             </button>
@@ -107,14 +114,14 @@ export function SsePanel() {
       </div>
 
       {error && (
-        <div className="px-4 py-2 text-[11px] text-error border-b border-border-light bg-error/5">
+        <div className="px-4 py-2 text-[11px] text-destructive border-b border-border bg-destructive/5">
           {error.message}
         </div>
       )}
 
-      <div ref={logRef} className="flex-1 overflow-auto p-3 space-y-1 bg-surface-secondary/40">
+      <div ref={logRef} className="flex-1 overflow-auto p-3 space-y-1 bg-muted/40">
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-[12px] text-text-tertiary">
+          <div className="text-center py-12 text-[12px] text-muted-foreground">
             {connected ? t("sse.waiting") : t("sse.not_connected")}
           </div>
         )}
@@ -126,17 +133,17 @@ export function SsePanel() {
               key={e.id}
               className={`px-2 py-1.5 rounded text-[12px] font-mono ${
                 isErr
-                  ? "bg-error/10 text-error"
+                  ? "bg-destructive/10 text-destructive"
                   : isMsg
-                    ? "bg-surface text-text-primary"
-                    : "bg-transparent text-text-tertiary italic"
+                    ? "bg-card text-foreground"
+                    : "bg-transparent text-muted-foreground italic"
               }`}
             >
               <div className="flex items-center gap-2 text-[10px] opacity-70">
                 <span>{new Date(e.ts).toLocaleTimeString()}</span>
                 <span className="uppercase">{e.kind}</span>
                 {e.event && (
-                  <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded font-semibold uppercase">
+                  <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded font-semibold uppercase">
                     {e.event}
                   </span>
                 )}

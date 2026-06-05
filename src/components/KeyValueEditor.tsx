@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Plus,
@@ -17,6 +17,9 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { KeyValue } from "../types";
 import { VariablePreview } from "./VariablePreview";
 import { parseKeyValues, serializeKeyValues } from "../utils/kvBulk";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface KeyValueEditorProps {
   items: KeyValue[];
@@ -60,6 +63,24 @@ export function KeyValueEditor({
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkText, setBulkText] = useState("");
+  // Keyboard flow: Enter on a value adds/advances a row, Backspace on a fully
+  // empty row deletes it. Inputs are focused by a "<id>:key" / "<id>:value"
+  // handle once the controlled `items` re-render has landed.
+  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
+  const refKey = (id: string, field: "key" | "value") => `${id}:${field}`;
+  const setInputRef = (key: string, el: HTMLInputElement | null) => {
+    if (el) inputRefs.current.set(key, el);
+    else inputRefs.current.delete(key);
+  };
+  useEffect(() => {
+    if (!pendingFocus) return;
+    const el = inputRefs.current.get(pendingFocus);
+    if (el) {
+      el.focus();
+      setPendingFocus(null);
+    }
+  }, [pendingFocus, items]);
 
   const keyPh = keyPlaceholder ?? t("kv.key_placeholder");
   const valuePh = valuePlaceholder ?? t("kv.value_placeholder");
@@ -160,30 +181,30 @@ export function KeyValueEditor({
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-text-tertiary">
+          <span className="text-[11px] text-muted-foreground">
             {t("kv.bulk_hint")}
           </span>
           <div className="flex items-center gap-1">
             <button
               onClick={cancelBulkMode}
-              className="px-2 py-1 text-[11px] text-text-secondary rounded-md hover:bg-surface-secondary transition-colors"
+              className="px-2 py-1 text-[11px] text-muted-foreground rounded-md hover:bg-muted transition-colors"
             >
               {t("common.cancel")}
             </button>
             <button
               onClick={applyBulkMode}
-              className="px-2 py-1 text-[11px] bg-accent text-white rounded-md hover:bg-accent-hover transition-colors"
+              className="px-2 py-1 text-[11px] bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
             >
               {t("kv.bulk_apply")}
             </button>
           </div>
         </div>
-        <textarea
+        <Textarea
           value={bulkText}
           onChange={(e) => setBulkText(e.target.value)}
           placeholder={t("kv.bulk_placeholder")}
           spellCheck={false}
-          className="input-apple w-full text-[12px] font-mono py-2 min-h-[180px] resize-y"
+          className="min-h-[180px] w-full resize-y py-2 font-mono text-[12px]"
         />
       </div>
     );
@@ -195,10 +216,10 @@ export function KeyValueEditor({
   return (
     <div className="space-y-1.5">
       {showBulkToolbar && (
-        <div className="flex items-center justify-end gap-1 text-[11px] text-text-tertiary pb-1">
+        <div className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground pb-1">
           <button
             onClick={() => setAllEnabled(!allEnabled)}
-            className="px-1.5 py-0.5 rounded-md hover:bg-surface-secondary flex items-center gap-1 transition-colors"
+            className="px-1.5 py-0.5 rounded-md hover:bg-muted flex items-center gap-1 transition-colors"
             title={
               allEnabled
                 ? t("kv.disable_all_tooltip")
@@ -215,7 +236,7 @@ export function KeyValueEditor({
           {bulkAllowed && (
             <button
               onClick={enterBulkMode}
-              className="px-1.5 py-0.5 rounded-md hover:bg-surface-secondary flex items-center gap-1 transition-colors"
+              className="px-1.5 py-0.5 rounded-md hover:bg-muted flex items-center gap-1 transition-colors"
               title={t("kv.bulk_edit_tooltip")}
             >
               <Type size={11} />
@@ -225,7 +246,7 @@ export function KeyValueEditor({
         </div>
       )}
 
-      {items.map((item) => {
+      {items.map((item, idx) => {
         const isExpanded = expandedRows.has(item.id);
         const isOver = overId === item.id && draggingId && draggingId !== item.id;
         return (
@@ -251,7 +272,7 @@ export function KeyValueEditor({
               setOverId(null);
             }}
             className={`flex items-start gap-1.5 group rounded-md transition-colors ${
-              isOver ? "bg-accent/5 outline outline-1 outline-accent/40" : ""
+              isOver ? "bg-primary/5 outline outline-1 outline-primary/40" : ""
             } ${draggingId === item.id ? "opacity-50" : ""}`}
           >
             {reorderable && (
@@ -261,16 +282,17 @@ export function KeyValueEditor({
               >
                 <GripVertical
                   size={12}
-                  className="text-text-tertiary/30 group-hover:text-text-tertiary transition-colors"
+                  className="text-muted-foreground/30 group-hover:text-muted-foreground transition-colors"
                 />
               </span>
             )}
             <label className="relative flex items-center justify-center w-5 h-7 shrink-0">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={item.enabled}
-                onChange={(e) => updateItem(item.id, { enabled: e.target.checked })}
-                className="w-[15px] h-[15px] rounded-[4px] border border-border accent-accent cursor-pointer"
+                onCheckedChange={(c) =>
+                  updateItem(item.id, { enabled: c === true })
+                }
+                className="h-[15px] w-[15px]"
                 title={
                   item.enabled
                     ? t("kv.toggle_disable")
@@ -278,19 +300,33 @@ export function KeyValueEditor({
                 }
               />
             </label>
-            <input
+            <Input
+              ref={(el) => setInputRef(refKey(item.id, "key"), el)}
               type="text"
               value={item.key}
               onChange={(e) => updateItem(item.id, { key: e.target.value })}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Backspace" &&
+                  item.key === "" &&
+                  item.value === "" &&
+                  items.length > 1
+                ) {
+                  e.preventDefault();
+                  const prev = items[idx - 1];
+                  removeItem(item.id);
+                  if (prev) setPendingFocus(refKey(prev.id, "value"));
+                }
+              }}
               placeholder={keyPh}
               spellCheck={false}
-              className="input-apple w-[180px] text-[12px] py-[5px]"
+              className="h-7 w-[180px] text-[12px]"
             />
             {item.is_file ? (
-              <div className="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-[5px] bg-surface-secondary rounded-lg text-[12px]">
-                <FileText size={12} className="text-accent shrink-0" />
+              <div className="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-[5px] bg-muted rounded-lg text-[12px]">
+                <FileText size={12} className="text-primary shrink-0" />
                 <span
-                  className="truncate flex-1 text-text-primary"
+                  className="truncate flex-1 text-foreground"
                   title={item.file_path}
                 >
                   {item.file_path?.split(/[\\/]/).pop() || t("kv.select_file")}
@@ -299,29 +335,45 @@ export function KeyValueEditor({
                   onClick={() =>
                     updateItem(item.id, { is_file: false, file_path: undefined })
                   }
-                  className="text-text-tertiary hover:text-error transition-colors shrink-0"
+                  className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                   title={t("kv.switch_back_to_text")}
                 >
                   <X size={11} />
                 </button>
               </div>
             ) : isExpanded ? (
-              <textarea
+              <Textarea
                 value={item.value}
                 onChange={(e) => updateItem(item.id, { value: e.target.value })}
                 placeholder={valuePh}
                 spellCheck={false}
                 rows={3}
-                className="input-apple flex-1 min-w-0 text-[12px] py-[5px] font-mono resize-y"
+                className="min-h-0 min-w-0 flex-1 resize-y py-[5px] font-mono text-[12px]"
               />
             ) : (
-              <input
+              <Input
+                ref={(el) => setInputRef(refKey(item.id, "value"), el)}
                 type="text"
                 value={item.value}
                 onChange={(e) => updateItem(item.id, { value: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (idx === items.length - 1) {
+                      const id = generateId();
+                      onChange([
+                        ...items,
+                        { id, key: "", value: "", enabled: true },
+                      ]);
+                      setPendingFocus(refKey(id, "key"));
+                    } else {
+                      setPendingFocus(refKey(items[idx + 1].id, "key"));
+                    }
+                  }
+                }}
                 placeholder={valuePh}
                 spellCheck={false}
-                className="input-apple flex-1 min-w-0 text-[12px] py-[5px]"
+                className="h-7 min-w-0 flex-1 text-[12px]"
                 title={item.value || undefined}
               />
             )}
@@ -333,7 +385,7 @@ export function KeyValueEditor({
             {!item.is_file && (
               <button
                 onClick={() => toggleExpanded(item.id)}
-                className="w-5 h-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-all shrink-0"
+                className="w-5 h-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent transition-all shrink-0"
                 title={
                   isExpanded
                     ? t("kv.collapse_value")
@@ -341,27 +393,27 @@ export function KeyValueEditor({
                 }
               >
                 {isExpanded ? (
-                  <Minimize2 size={11} className="text-text-tertiary" />
+                  <Minimize2 size={11} className="text-muted-foreground" />
                 ) : (
-                  <Maximize2 size={11} className="text-text-tertiary" />
+                  <Maximize2 size={11} className="text-muted-foreground" />
                 )}
               </button>
             )}
             {allowFiles && (
               <button
                 onClick={() => pickFile(item.id)}
-                className="w-5 h-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent/10 transition-all shrink-0"
+                className="w-5 h-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-primary/10 transition-all shrink-0"
                 title={t("kv.attach_file")}
               >
-                <Paperclip size={12} className="text-text-tertiary" />
+                <Paperclip size={12} className="text-muted-foreground" />
               </button>
             )}
             <button
               onClick={() => removeItem(item.id)}
-              className="w-5 h-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-all shrink-0"
+              className="w-5 h-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent transition-all shrink-0"
               title={t("kv.remove_row")}
             >
-              <X size={12} className="text-text-tertiary" />
+              <X size={12} className="text-muted-foreground" />
             </button>
           </div>
         );
@@ -369,7 +421,7 @@ export function KeyValueEditor({
       <div className="flex items-center gap-2 pl-6 pt-0.5">
         <button
           onClick={addItem}
-          className="flex items-center gap-1 text-[12px] text-accent hover:text-accent-hover transition-colors py-1"
+          className="flex items-center gap-1 text-[12px] text-primary hover:text-primary/90 transition-colors py-1"
         >
           <Plus size={12} strokeWidth={2.2} />
           {t("kv.add")}
@@ -377,7 +429,7 @@ export function KeyValueEditor({
         {!showBulkToolbar && bulkAllowed && meaningfulRows > 0 && (
           <button
             onClick={enterBulkMode}
-            className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-secondary transition-colors py-1"
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-muted-foreground transition-colors py-1"
             title={t("kv.bulk_edit_tooltip")}
           >
             <List size={11} />

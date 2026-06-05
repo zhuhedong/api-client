@@ -113,6 +113,9 @@
     "pre_request": "Pre-request",
     "tests": "Tests",
     "settings": "Settings",
+    "docs": "Docs",
+    "docs_hint": "Notes for this request — purpose, dependencies, gotchas. Saved with the collection.",
+    "docs_placeholder": "Describe this request…",
     "url_placeholder": "https://api.example.com/endpoint",
     "ws_url_placeholder": "wss://echo.websocket.events",
     "sse_url_placeholder": "https://example.com/events",
@@ -461,6 +464,42 @@
     "not_connected": "Not connected. Hit Connect to start streaming.",
     "stream_open": "stream open",
     "stream_closed": "stream closed"
+  },
+  "collection_settings": {
+    "open_tooltip": "Collection settings (description, auth, variables, scripts)",
+    "title": "Collection settings — {{name}}",
+    "tab_description": "Description",
+    "tab_auth": "Auth",
+    "tab_variables": "Variables",
+    "tab_scripts": "Scripts",
+    "description_placeholder": "Document this collection — overview, auth notes, conventions…",
+    "variables_empty": "No collection variables yet.",
+    "pre_script": "Pre-request script",
+    "pre_script_hint": "Runs before every request in this collection (ahead of folder and request pre-scripts).",
+    "post_script": "Post-response script",
+    "post_script_hint": "Runs after every request's own test script."
+  },
+  "context_menu": {
+    "rename": "Rename",
+    "delete": "Delete",
+    "new_folder": "New folder",
+    "close": "Close",
+    "close_others": "Close others",
+    "copy_name": "Copy name"
+  },
+  "resolved_vars": {
+    "button": "Vars",
+    "title": "Resolved Variables",
+    "hint": "Variables visible to this request and which scope each value came from. Script-time overrides aren't shown.",
+    "empty": "No variables in scope for this request.",
+    "empty_value": "(empty)",
+    "col_name": "Name",
+    "col_value": "Value",
+    "col_source": "Source",
+    "source_global": "Global",
+    "source_collection": "Collection",
+    "source_folder": "Folder",
+    "source_environment": "Environment"
   },
   "tab": {
     "close": "Close tab",

@@ -54,6 +54,9 @@ pub struct CollectionRequest {
     pub body: String,
     pub body_type: String,
     pub auth: Option<AuthConfig>,
+    /// Free-form documentation shown in the request "Docs" tab.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Pre-request script source. Runs in the frontend Web Worker sandbox.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pre_script: Option<String>,
@@ -81,6 +84,12 @@ pub struct CollectionFolder {
     /// overridden by environment / transient vars during substitution.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub variables: Vec<EnvVariable>,
+    /// Folder-level pre-request script, run before each request in this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pre_script: Option<String>,
+    /// Folder-level test script, run after each request in this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_script: Option<String>,
     pub requests: Vec<CollectionRequest>,
     pub folders: Vec<CollectionFolder>,
 }
@@ -90,6 +99,14 @@ pub struct CollectionFile {
     pub id: String,
     pub name: String,
     pub description: String,
+    /// Collection-level pre-request script, run before every request in the
+    /// collection (ahead of folder- and request-level pre-scripts).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pre_script: Option<String>,
+    /// Collection-level post-response script, run after every request's own
+    /// test script.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_script: Option<String>,
     pub auth: Option<AuthConfig>,
     /// Collection-scoped variables. Sit above global vars and below folder /
     /// environment / transient vars in the substitution precedence chain.

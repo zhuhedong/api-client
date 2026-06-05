@@ -8,12 +8,12 @@
  * tailwind config (see tailwind.config.js).
  */
 const PALETTE: Array<[string, string]> = [
-  ["text-accent", "bg-accent/15"],
+  ["text-primary", "bg-primary/15"],
   ["text-success", "bg-success/15"],
   ["text-orange", "bg-orange/15"],
   ["text-purple", "bg-purple/15"],
   ["text-teal", "bg-teal/15"],
-  ["text-error", "bg-error/15"],
+  ["text-destructive", "bg-destructive/15"],
 ];
 
 function hash(s: string): number {

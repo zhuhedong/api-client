@@ -9,11 +9,25 @@ import { SsePanel } from "./components/SsePanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { SaveToCollectionModal } from "./components/SaveToCollectionModal";
 import { Splitter } from "./components/Splitter";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { useRequestStore } from "./store/useRequestStore";
 import i18n from "./i18n";
 
-const DEFAULT_SIDEBAR_WIDTH = 256;
+// Doubles as the drag floor (Splitter `min` below): the sidebar opens at
+// this width and can be widened but never dragged narrower than it.
+const DEFAULT_SIDEBAR_WIDTH = 260;
+const SIDEBAR_MAX_WIDTH = 360;
 const DEFAULT_REQUEST_PANEL_PCT = 48;
+
+/** Resolve a persisted sidebar width, clamping to the drag range so a width
+ *  saved under an older, smaller `min` never renders narrower than the
+ *  current floor on load (the Splitter only clamps during an active drag). */
+function resolveSidebarWidth(saved: number | undefined): number {
+  return Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(DEFAULT_SIDEBAR_WIDTH, saved ?? DEFAULT_SIDEBAR_WIDTH),
+  );
+}
 
 interface WsEvent {
   request_id: string;
@@ -48,7 +62,7 @@ function App() {
   // Local mirror of the persisted layout numbers so dragging is smooth.
   // Persistence happens on drag end via setWindowState.
   const [sidebarWidth, setSidebarWidth] = useState<number>(
-    workspace?.window_state?.sidebar_width ?? DEFAULT_SIDEBAR_WIDTH,
+    resolveSidebarWidth(workspace?.window_state?.sidebar_width),
   );
   const [reqPanelPct, setReqPanelPct] = useState<number>(
     workspace?.window_state?.request_panel_height ?? DEFAULT_REQUEST_PANEL_PCT,
@@ -61,7 +75,7 @@ function App() {
   const [prevWorkspaceId, setPrevWorkspaceId] = useState(workspace?.id);
   if (workspace?.id !== prevWorkspaceId) {
     setPrevWorkspaceId(workspace?.id);
-    setSidebarWidth(workspace?.window_state?.sidebar_width ?? DEFAULT_SIDEBAR_WIDTH);
+    setSidebarWidth(resolveSidebarWidth(workspace?.window_state?.sidebar_width));
     setReqPanelPct(
       workspace?.window_state?.request_panel_height ?? DEFAULT_REQUEST_PANEL_PCT,
     );
@@ -221,10 +235,10 @@ function App() {
 
   if (!initialized) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-bg">
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <span className="text-[13px] text-text-tertiary">Loading...</span>
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-[13px] text-muted-foreground">Loading...</span>
         </div>
       </div>
     );
@@ -235,15 +249,16 @@ function App() {
   const isSse = protocol === "sse";
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg">
+    <TooltipProvider delayDuration={300}>
+      <div className="flex h-screen w-screen overflow-hidden bg-background">
       <div style={{ width: sidebarWidth }} className="shrink-0 h-full">
         <Sidebar />
       </div>
       <Splitter
         orientation="horizontal"
         initial={sidebarWidth}
-        min={180}
-        max={520}
+        min={DEFAULT_SIDEBAR_WIDTH}
+        max={SIDEBAR_MAX_WIDTH}
         onChange={setSidebarWidth}
         onCommit={(v) => setWindowState({ sidebar_width: Math.round(v) })}
       />
@@ -251,7 +266,7 @@ function App() {
         <TabBar />
         <div className="flex-1 min-h-0 flex flex-col gap-0 p-3 pl-0 overflow-hidden">
           <div
-            className="shrink-0 bg-surface rounded-t-apple-lg shadow-apple overflow-hidden flex flex-col"
+            className="shrink-0 bg-card rounded-t-xl shadow overflow-hidden flex flex-col"
             style={{ height: `${reqPanelPct}%` }}
           >
             <RequestPanel />
@@ -264,7 +279,7 @@ function App() {
             onChange={setReqPanelPct}
             onCommit={(v) => setWindowState({ request_panel_height: Math.round(v) })}
           />
-          <div className="min-h-0 bg-surface rounded-b-apple-lg shadow-apple overflow-hidden flex-1 flex flex-col border-t border-border-light">
+          <div className="min-h-0 bg-card rounded-b-xl shadow overflow-hidden flex-1 flex flex-col border-t border-border">
             {isWs ? <WsPanel /> : isSse ? <SsePanel /> : <ResponsePanel />}
           </div>
         </div>
@@ -283,7 +298,8 @@ function App() {
           }}
         />
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 

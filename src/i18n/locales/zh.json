@@ -113,6 +113,9 @@
     "pre_request": "Pre-request",
     "tests": "Tests",
     "settings": "设置",
+    "docs": "文档",
+    "docs_hint": "记录此请求的用途、依赖、注意事项,随集合保存。",
+    "docs_placeholder": "描述这个请求…",
     "url_placeholder": "https://api.example.com/endpoint",
     "ws_url_placeholder": "wss://echo.websocket.events",
     "sse_url_placeholder": "https://example.com/events",
@@ -456,6 +459,42 @@
     "not_connected": "未连接。点击 连接 开始接收事件。",
     "stream_open": "流已打开",
     "stream_closed": "流已关闭"
+  },
+  "collection_settings": {
+    "open_tooltip": "集合设置(描述、认证、变量、脚本)",
+    "title": "集合设置 — {{name}}",
+    "tab_description": "描述",
+    "tab_auth": "认证",
+    "tab_variables": "变量",
+    "tab_scripts": "脚本",
+    "description_placeholder": "记录这个集合 — 概述、认证说明、约定……",
+    "variables_empty": "暂无集合变量。",
+    "pre_script": "前置脚本",
+    "pre_script_hint": "在该集合每个请求之前运行(早于文件夹与请求级前置脚本)。",
+    "post_script": "后置脚本",
+    "post_script_hint": "在每个请求自身的测试脚本之后运行。"
+  },
+  "context_menu": {
+    "rename": "重命名",
+    "delete": "删除",
+    "new_folder": "新建文件夹",
+    "close": "关闭",
+    "close_others": "关闭其他",
+    "copy_name": "复制名称"
+  },
+  "resolved_vars": {
+    "button": "变量",
+    "title": "已解析变量",
+    "hint": "此请求可见的变量,以及每个值最终来自哪一层作用域。不含脚本运行时的临时覆盖。",
+    "empty": "此请求作用域内没有变量。",
+    "empty_value": "(空)",
+    "col_name": "名称",
+    "col_value": "值",
+    "col_source": "来源",
+    "source_global": "全局",
+    "source_collection": "集合",
+    "source_folder": "文件夹",
+    "source_environment": "环境"
   },
   "tab": {
     "close": "关闭标签页",

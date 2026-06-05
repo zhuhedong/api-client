@@ -206,9 +206,9 @@ export function SearchPalette({ onClose }: Props) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-[640px] max-w-[90vw] bg-surface rounded-apple-lg shadow-apple-lg overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-light">
-          <Search size={16} className="text-text-tertiary" />
+      <div className="w-[640px] max-w-[90vw] bg-card rounded-xl shadow-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <Search size={16} className="text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
@@ -231,13 +231,13 @@ export function SearchPalette({ onClose }: Props) {
               }
             }}
             placeholder={t("palette.placeholder")}
-            className="flex-1 bg-transparent text-[14px] text-text-primary placeholder-text-tertiary outline-none border-0"
+            className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground outline-none border-0"
           />
-          <kbd className="text-[10px] text-text-tertiary border border-border-light rounded px-1.5 py-0.5">ESC</kbd>
+          <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">ESC</kbd>
         </div>
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
           {ranked.length === 0 && (
-            <div className="text-center py-10 text-[12px] text-text-tertiary">
+            <div className="text-center py-10 text-[12px] text-muted-foreground">
               {t("palette.no_matches")}
             </div>
           )}
@@ -258,22 +258,22 @@ export function SearchPalette({ onClose }: Props) {
                   select(r);
                 }}
                 className={`flex items-center gap-3 px-4 py-2 cursor-pointer ${
-                  active ? "bg-accent/10" : ""
+                  active ? "bg-primary/10" : ""
                 }`}
               >
-                <Icon size={14} className={active ? "text-accent" : "text-text-tertiary"} />
+                <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] text-text-primary truncate">{r.label}</div>
-                  <div className="text-[11px] text-text-tertiary truncate">{r.sub}</div>
+                  <div className="text-[13px] text-foreground truncate">{r.label}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">{r.sub}</div>
                 </div>
-                <span className="text-[10px] uppercase text-text-tertiary opacity-60">
+                <span className="text-[10px] uppercase text-muted-foreground opacity-60">
                   {t(`palette.kind_${r.kind}` as const)}
                 </span>
               </div>
             );
           })}
         </div>
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-border-light text-[10px] text-text-tertiary">
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-border text-[10px] text-muted-foreground">
           <span>↑↓ {t("palette.navigate")}</span>
           <span>↵ {t("palette.open")}</span>
           <span>esc {t("palette.close")}</span>

@@ -58,11 +58,16 @@ export function createEmptyKeyValue(): KeyValue {
   return { id: generateId(), key: "", value: "", enabled: true };
 }
 
+/** Default name a freshly created request carries until the user renames it.
+ *  Tabs treat a request still using this name as "unnamed" and surface its
+ *  URL instead (see TabBar). */
+export const DEFAULT_REQUEST_NAME = "New Request";
+
 /** Build a fresh blank request for "new tab" / "new from history". */
 export function createNewRequest(): RequestItem {
   return {
     id: generateId(),
-    name: "New Request",
+    name: DEFAULT_REQUEST_NAME,
     method: "GET",
     url: "",
     headers: [createEmptyKeyValue()],

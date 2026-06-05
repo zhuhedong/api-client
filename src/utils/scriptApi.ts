@@ -73,6 +73,7 @@ export function readonlyScopeApi(
 
 export interface ChainHave {
   status: (code: number) => void;
+  header: (name: string) => void;
   property: (key: string) => void;
   lengthOf: (n: number) => void;
   length: (n: number) => void;
@@ -174,6 +175,14 @@ export function buildChain(actual: unknown, negate: boolean): ChainNode {
       const hasIt =
         !!actual && typeof actual === "object" && key in (actual as object);
       failIfNot(hasIt, `expected object to have property "${key}"`);
+    },
+    header: (name: string) => {
+      const r = actual as { headers?: Record<string, string> };
+      const headers = r?.headers ?? {};
+      const found = Object.keys(headers).some(
+        (k) => k.toLowerCase() === name.toLowerCase(),
+      );
+      failIfNot(found, `expected response to have header "${name}"`);
     },
     lengthOf,
     length: lengthOf,

@@ -116,7 +116,15 @@ export interface AuthConfig {
   aws_service?: string;
 }
 
-export type BodyType = "none" | "json" | "text" | "xml" | "form-data" | "graphql";
+export type BodyType =
+  | "none"
+  | "json"
+  | "text"
+  | "xml"
+  | "form-data"
+  | "x-www-form-urlencoded"
+  | "binary"
+  | "graphql";
 
 export type Protocol = "http" | "websocket" | "sse";
 
@@ -172,6 +180,9 @@ export interface RequestItem {
   /** GraphQL query and variables when bodyType === "graphql". */
   graphqlQuery?: string;
   graphqlVariables?: string;
+  /** Absolute path to a file sent as the raw request body when
+   *  bodyType === "binary". */
+  binaryFilePath?: string;
   /**
    * Pre-request script source. Runs in a Web Worker sandbox before the
    * request is sent and can mutate environment / variable scopes via the
@@ -184,6 +195,9 @@ export interface RequestItem {
    * to record assertions surfaced in the response panel.
    */
   testScript?: string;
+  /** Free-form documentation for this request, shown in the request "Docs"
+   *  tab. Persisted with the collection on save. */
+  description?: string;
   /**
    * Free-form labels for filtering and color-coding in the sidebar (e.g.
    * "auth", "v2", "broken"). Persisted with the collection on save.
@@ -211,13 +225,18 @@ export interface ScriptRunOutcome {
   logs: ScriptLog[];
 }
 
-/** Phased breakdown of a response's wall-clock time. Reqwest can't give us
- *  DNS / TCP / TLS individually without a custom connector; for now we ship
- *  the two-phase split (wait until headers arrived, then body download). */
+/** Phased breakdown of a response's wall-clock time. `wait`/`download` are
+ *  always measured; the DNS/TCP/TLS phases are populated only when the request
+ *  opted into profiling (a separate connection probe — reqwest can't surface
+ *  its pooled connector's phases). */
 export interface ResponseTimings {
   wait_ms: number;
   download_ms: number;
   total_ms: number;
+  /** Connection-phase breakdown; present (non-zero) only when profiled. */
+  dns_ms?: number;
+  tcp_ms?: number;
+  tls_ms?: number;
 }
 
 /**
@@ -312,6 +331,11 @@ export interface CollectionFolder {
   auth?: AuthConfig;
   /** Folder-scoped variables. Override collection/global vars during substitution. */
   variables?: EnvVariable[];
+  /** Folder-level pre-request script, run before each request in this folder
+   *  (after the collection pre-script, before the request's own pre-script). */
+  pre_script?: string;
+  /** Folder-level test script, run after each request in this folder. */
+  test_script?: string;
   requests: CollectionRequest[];
   folders: CollectionFolder[];
 }
@@ -326,6 +350,8 @@ export interface CollectionRequest {
   body: string;
   body_type: string;
   auth?: AuthConfig;
+  /** Free-form documentation shown in the request "Docs" tab. */
+  description?: string;
   /** Pre-request script source. */
   pre_script?: string;
   /** Post-response test script source. */
@@ -340,6 +366,12 @@ export interface Collection {
   id: string;
   name: string;
   description: string;
+  /** Collection-level pre-request script, run before every request in the
+   *  collection (ahead of folder- and request-level pre-scripts). */
+  pre_script?: string;
+  /** Collection-level post-response script, run after every request's own
+   *  test script. */
+  post_script?: string;
   auth?: AuthConfig;
   /** Collection-scoped variables. Override global vars; overridden by folder/env/transient. */
   variables?: EnvVariable[];

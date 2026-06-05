@@ -83,6 +83,14 @@ pub struct RequestPayload {
     /// is set in the response. Defaults to 10 MiB.
     #[serde(default)]
     pub max_body_bytes: Option<usize>,
+    /// Absolute path to a file whose raw bytes form the request body when
+    /// `body_type == "binary"`.
+    #[serde(default)]
+    pub binary_file_path: Option<String>,
+    /// When `Some(true)`, run a separate DNS/TCP/TLS connection probe and
+    /// report the phase timings. Opt-in because it opens an extra connection.
+    #[serde(default)]
+    pub measure_timing: Option<bool>,
 }
 
 /// Phased breakdown of the request's wall-clock time. `total_ms` is what we
@@ -99,6 +107,16 @@ pub struct ResponseTimings {
     /// Time to drain the response body once headers arrived.
     pub download_ms: u64,
     pub total_ms: u64,
+    /// Connection-phase breakdown, populated only when the request opted into
+    /// profiling (`measure_timing`). Zero when not measured. Measured by a
+    /// separate probe connection, so these are representative rather than the
+    /// exact phases of the pooled connection reqwest used.
+    #[serde(default)]
+    pub dns_ms: u64,
+    #[serde(default)]
+    pub tcp_ms: u64,
+    #[serde(default)]
+    pub tls_ms: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -481,6 +499,32 @@ async fn send_request(
             }
             request_builder = request_builder.multipart(form);
         }
+    } else if payload.body_type.as_deref() == Some("x-www-form-urlencoded") {
+        // URL-encoded pairs reuse the same `form_data` field as multipart. A
+        // Vec of pairs (not a map) preserves order and duplicate keys; reqwest
+        // sets `Content-Type: application/x-www-form-urlencoded` automatically.
+        if let Some(form_fields) = &payload.form_data {
+            let pairs: Vec<(&str, &str)> = form_fields
+                .iter()
+                .filter(|f| f.enabled && !f.key.is_empty())
+                .map(|f| (f.key.as_str(), f.value.as_str()))
+                .collect();
+            request_builder = request_builder.form(&pairs);
+        }
+    } else if payload.body_type.as_deref() == Some("binary") {
+        // Raw file body: stream the file's bytes as-is. No Content-Type is set
+        // unless the user added one in headers (reqwest leaves it unset).
+        if let Some(path) = &payload.binary_file_path {
+            if !path.is_empty() {
+                let bytes = tokio::fs::read(path).await.map_err(|e| {
+                    RequestError::input(
+                        "FILE_READ_FAILED",
+                        format!("Failed to read file '{}': {}", path, e),
+                    )
+                })?;
+                request_builder = request_builder.body(bytes);
+            }
+        }
     } else if let Some(body) = &payload.body {
         if !body.is_empty() {
             request_builder = request_builder.body(body.clone());
@@ -569,6 +613,21 @@ async fn send_request(
         }
     }
 
+    let mut timings = ResponseTimings {
+        wait_ms,
+        download_ms,
+        total_ms: elapsed,
+        ..Default::default()
+    };
+    // Opt-in connection profiling: a separate probe so DNS/TCP/TLS phases can
+    // be surfaced (reqwest 0.12 doesn't expose its pooled connector's phases).
+    if payload.measure_timing == Some(true) {
+        let probe = probe_connection_timing(&payload.url).await;
+        timings.dns_ms = probe.dns_ms;
+        timings.tcp_ms = probe.tcp_ms;
+        timings.tls_ms = probe.tls_ms;
+    }
+
     Ok(ResponseData {
         status,
         status_text,
@@ -578,12 +637,61 @@ async fn send_request(
         body_truncated: truncated,
         time_ms: elapsed,
         size_bytes,
-        timings: ResponseTimings {
-            wait_ms,
-            download_ms,
-            total_ms: elapsed,
-        },
+        timings,
     })
+}
+
+/// Best-effort connection profiler: separately resolves DNS, opens a TCP
+/// socket, and (for https) performs a TLS handshake, timing each phase. This is
+/// a *probe* — a fresh connection distinct from the one reqwest pools for the
+/// real request — because reqwest 0.12 doesn't expose its connector's internal
+/// phase timings. Any failure yields zeros for the unreached phases rather than
+/// erroring the request.
+async fn probe_connection_timing(raw_url: &str) -> ResponseTimings {
+    let mut t = ResponseTimings::default();
+    let parsed = match url::Url::parse(raw_url) {
+        Ok(u) => u,
+        Err(_) => return t,
+    };
+    let host = match parsed.host_str() {
+        Some(h) => h.to_string(),
+        None => return t,
+    };
+    let is_https = parsed.scheme() == "https";
+    let port = parsed
+        .port_or_known_default()
+        .unwrap_or(if is_https { 443 } else { 80 });
+
+    let dns_start = Instant::now();
+    let mut addrs = match tokio::net::lookup_host((host.as_str(), port)).await {
+        Ok(it) => it,
+        Err(_) => return t,
+    };
+    t.dns_ms = dns_start.elapsed().as_millis() as u64;
+    let addr = match addrs.next() {
+        Some(a) => a,
+        None => return t,
+    };
+
+    let tcp_start = Instant::now();
+    let stream = match tokio::net::TcpStream::connect(addr).await {
+        Ok(s) => s,
+        Err(_) => return t,
+    };
+    t.tcp_ms = tcp_start.elapsed().as_millis() as u64;
+
+    if is_https {
+        let tls_start = Instant::now();
+        if let Ok(c) = native_tls::TlsConnector::new() {
+            let connector = tokio_native_tls::TlsConnector::from(c);
+            // Ignore handshake errors (e.g. self-signed): we still report the
+            // time spent attempting it.
+            let _ = connector.connect(host.as_str(), stream).await;
+        }
+        t.tls_ms = tls_start.elapsed().as_millis() as u64;
+    }
+
+    t
 }
 
 // ============================================================================

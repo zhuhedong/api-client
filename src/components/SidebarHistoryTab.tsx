@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
 import { useTranslation } from "react-i18next";
 import { Search, X, Clock, Trash2 } from "lucide-react";
 import { useRequestStore } from "../store/useRequestStore";
@@ -18,11 +19,11 @@ interface SidebarHistoryTabProps {
 const METHOD_BADGE: Record<string, string> = {
   GET: "bg-success/15 text-success",
   POST: "bg-orange/15 text-orange",
-  PUT: "bg-accent/15 text-accent",
+  PUT: "bg-primary/15 text-primary",
   PATCH: "bg-purple/15 text-purple",
-  DELETE: "bg-error/15 text-error",
-  HEAD: "bg-text-tertiary/15 text-text-secondary",
-  OPTIONS: "bg-text-tertiary/15 text-text-secondary",
+  DELETE: "bg-destructive/15 text-destructive",
+  HEAD: "bg-muted-foreground/15 text-muted-foreground",
+  OPTIONS: "bg-muted-foreground/15 text-muted-foreground",
 };
 
 /**
@@ -69,19 +70,19 @@ export function SidebarHistoryTab({
         <div className="relative">
           <Search
             size={13}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
-          <input
+          <Input
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder={t("common.search") + "…"}
-            className="input-apple w-full text-[12px] py-[5px] pl-8 pr-7"
+            className="h-8 w-full pl-8 pr-7 text-[12px]"
           />
           {searchQuery && (
             <button
               onClick={() => handleSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
             >
               <X size={12} />
             </button>
@@ -94,10 +95,10 @@ export function SidebarHistoryTab({
           <div className="text-center py-12">
             <Clock
               size={28}
-              className="mx-auto text-text-tertiary mb-2"
+              className="mx-auto text-muted-foreground mb-2"
               strokeWidth={1.5}
             />
-            <p className="text-text-tertiary text-[12px]">
+            <p className="text-muted-foreground text-[12px]">
               {searchQuery ? "No results found" : "No requests yet"}
             </p>
           </div>
@@ -114,7 +115,7 @@ export function SidebarHistoryTab({
               setDraggingId(null);
             }}
             onDragEnd={() => setDraggingId(null)}
-            className={`group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-black/[0.04] active:bg-black/[0.06] cursor-pointer transition-colors ${activeRequestId === item.id ? "bg-accent/[0.07]" : ""}`}
+            className={`group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-accent active:bg-accent cursor-pointer transition-colors ${activeRequestId === item.id ? "bg-primary/[0.07]" : ""}`}
             onClick={() => loadFromHistory(item.id)}
           >
             <span
@@ -122,7 +123,7 @@ export function SidebarHistoryTab({
             >
               {item.method}
             </span>
-            <span className="text-[12px] text-text-secondary truncate flex-1">
+            <span className="text-[12px] text-muted-foreground truncate flex-1">
               {(() => {
                 try {
                   return new URL(item.url).pathname;
@@ -136,9 +137,9 @@ export function SidebarHistoryTab({
                 e.stopPropagation();
                 deleteRequestFromHistory(item.id);
               }}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-error/10 rounded-md transition-all"
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded-md transition-all"
             >
-              <Trash2 size={12} className="text-error/70" />
+              <Trash2 size={12} className="text-destructive/70" />
             </button>
           </div>
         ))}
@@ -147,7 +148,7 @@ export function SidebarHistoryTab({
       {history.length > 0 && !searchQuery && (
         <button
           onClick={() => clearAllHistory()}
-          className="mt-3 w-full text-center text-[11px] text-text-tertiary hover:text-error transition-colors py-1.5"
+          className="mt-3 w-full text-center text-[11px] text-muted-foreground hover:text-destructive transition-colors py-1.5"
         >
           Clear All History
         </button>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Check, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useTranslation } from "react-i18next";
 import { useRequestStore } from "../store/useRequestStore";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -105,20 +106,20 @@ export function WorkspaceSwitcher() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-surface-secondary hover:bg-surface-secondary/70 rounded-lg text-[12px] text-text-secondary transition-colors"
+        className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-muted hover:bg-muted/70 rounded-lg text-[12px] text-muted-foreground transition-colors"
         title={t("workspace.switch")}
       >
         <span className="flex items-center gap-1.5 truncate">
-          <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-          <span className="truncate font-medium text-text-primary">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+          <span className="truncate font-medium text-foreground">
             {workspace?.name ?? t("errors.no_workspace")}
           </span>
         </span>
-        <ChevronDown size={11} className="text-text-tertiary shrink-0" />
+        <ChevronDown size={11} className="text-muted-foreground shrink-0" />
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface rounded-apple shadow-apple-lg border border-border-light z-30 overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-card rounded-lg shadow-lg border border-border z-30 overflow-hidden">
           <div className="max-h-72 overflow-y-auto">
             {workspaces.map((w) => {
               const isActive = w.id === workspace?.id;
@@ -126,13 +127,13 @@ export function WorkspaceSwitcher() {
               return (
                 <div
                   key={w.id}
-                  className={`flex items-center gap-1 px-2 py-1.5 hover:bg-surface-secondary transition-colors ${
-                    isActive ? "bg-accent/5" : ""
+                  className={`flex items-center gap-1 px-2 py-1.5 hover:bg-muted transition-colors ${
+                    isActive ? "bg-primary/5" : ""
                   }`}
                 >
                   {isRenaming ? (
                     <>
-                      <input
+                      <Input
                         autoFocus
                         value={renameValue}
                         onChange={(e) => setRenameValue(e.target.value)}
@@ -143,24 +144,24 @@ export function WorkspaceSwitcher() {
                             setRenameValue("");
                           }
                         }}
-                        className="input-apple flex-1 text-[12px] py-0.5"
+                        className="h-7 flex-1 text-[12px]"
                       />
                       <button
                         onClick={commitRename}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10"
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-accent"
                         title={t("common.save")}
                       >
-                        <Check size={12} className="text-accent" />
+                        <Check size={12} className="text-primary" />
                       </button>
                       <button
                         onClick={() => {
                           setRenamingId(null);
                           setRenameValue("");
                         }}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10"
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-accent"
                         title={t("common.cancel")}
                       >
-                        <X size={12} className="text-text-tertiary" />
+                        <X size={12} className="text-muted-foreground" />
                       </button>
                     </>
                   ) : (
@@ -170,29 +171,29 @@ export function WorkspaceSwitcher() {
                           switchWorkspace(w.id);
                           setOpen(false);
                         }}
-                        className="flex-1 flex items-center gap-1.5 text-left text-[12px] text-text-primary py-0.5"
+                        className="flex-1 flex items-center gap-1.5 text-left text-[12px] text-foreground py-0.5"
                       >
-                        {isActive && <Check size={11} className="text-accent shrink-0" />}
+                        {isActive && <Check size={11} className="text-primary shrink-0" />}
                         <span className={`truncate ${isActive ? "ml-0" : "ml-[15px]"}`}>{w.name}</span>
                       </button>
                       <button
                         onClick={() => startRename(w.id, w.name)}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100"
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-accent opacity-0 group-hover:opacity-100"
                         title={t("common.rename")}
                       >
-                        <Pencil size={11} className="text-text-tertiary" />
+                        <Pencil size={11} className="text-muted-foreground" />
                       </button>
                       <button
                         onClick={() => handleDelete(w.id, w.name)}
                         disabled={workspaces.length <= 1}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-error/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 disabled:opacity-30 disabled:cursor-not-allowed"
                         title={
                           workspaces.length <= 1
                             ? t("workspace.cannot_delete_last")
                             : t("workspace.delete_workspace")
                         }
                       >
-                        <Trash2 size={11} className="text-error" />
+                        <Trash2 size={11} className="text-destructive" />
                       </button>
                     </>
                   )}
@@ -202,8 +203,8 @@ export function WorkspaceSwitcher() {
           </div>
 
           {creating ? (
-            <div className="flex items-center gap-1 p-2 border-t border-border-light bg-surface-secondary/40">
-              <input
+            <div className="flex items-center gap-1 p-2 border-t border-border bg-muted/40">
+              <Input
                 autoFocus
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -215,31 +216,31 @@ export function WorkspaceSwitcher() {
                   }
                 }}
                 placeholder={t("workspace.workspace")}
-                className="input-apple flex-1 text-[12px] py-0.5"
+                className="h-7 flex-1 text-[12px]"
               />
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim()}
-                className="w-6 h-6 flex items-center justify-center rounded hover:bg-accent/10 disabled:opacity-30"
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/10 disabled:opacity-30"
                 title={t("common.new")}
               >
-                <Check size={12} className="text-accent" />
+                <Check size={12} className="text-primary" />
               </button>
               <button
                 onClick={() => {
                   setCreating(false);
                   setNewName("");
                 }}
-                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10"
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-accent"
                 title={t("common.cancel")}
               >
-                <X size={12} className="text-text-tertiary" />
+                <X size={12} className="text-muted-foreground" />
               </button>
             </div>
           ) : (
             <button
               onClick={() => setCreating(true)}
-              className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-accent hover:bg-accent/10 transition-colors border-t border-border-light"
+              className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-primary hover:bg-primary/10 transition-colors border-t border-border"
             >
               <Plus size={12} />
               {t("workspace.new_workspace")}
@@ -247,7 +248,7 @@ export function WorkspaceSwitcher() {
           )}
 
           {error && (
-            <div className="px-3 py-1.5 text-[11px] text-error border-t border-border-light bg-error/5">
+            <div className="px-3 py-1.5 text-[11px] text-destructive border-t border-border bg-destructive/5">
               {error}
             </div>
           )}

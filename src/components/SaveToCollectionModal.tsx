@@ -1,13 +1,27 @@
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { X, ChevronRight, ChevronDown, Folder, FolderOpen, Layers } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  Layers,
+} from "lucide-react";
 import { useRequestStore } from "../store/useRequestStore";
 import type { Collection, CollectionFolder } from "../types";
 import {
   initialSelectedDestination,
   type SaveDestination,
 } from "../utils/saveToCollection";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   /** Closes the modal. */
@@ -125,44 +139,41 @@ export function SaveToCollectionModal({ onClose, onSaved, initialError }: Props)
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-apple-lg shadow-apple-lg w-[520px] max-w-[92vw] max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-light">
-          <div className="flex items-center gap-2">
-            <Layers size={18} className="text-accent" />
-            <h2 className="text-[15px] font-semibold text-text-primary">
-              {t("save_collection.title")}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-secondary transition-colors"
-          >
-            <X size={16} className="text-text-tertiary" />
-          </button>
-        </div>
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="flex max-h-[85vh] max-w-[520px] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle className="flex items-center gap-2 text-[15px]">
+            <Layers size={18} className="text-primary" />
+            {t("save_collection.title")}
+          </DialogTitle>
+        </DialogHeader>
 
         <div className="px-5 pt-4 pb-2">
-          <label className="text-[12px] font-medium text-text-secondary block mb-1.5">
+          <label className="text-[12px] font-medium text-muted-foreground block mb-1.5">
             {t("save_collection.name")}
           </label>
-          <input
+          <Input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="input-apple w-full text-[12px]"
+            className="h-9 w-full text-[12px]"
             placeholder={t("save_collection.name_placeholder")}
           />
         </div>
 
         <div className="px-5 pb-2">
-          <div className="text-[12px] font-medium text-text-secondary mb-1.5">
+          <div className="text-[12px] font-medium text-muted-foreground mb-1.5">
             {t("save_collection.destination")}
           </div>
-          <div className="border border-border-light rounded-md max-h-[280px] overflow-y-auto">
+          <div className="border border-border rounded-md max-h-[280px] overflow-y-auto">
             {collections.length === 0 ? (
-              <div className="px-3 py-6 text-center text-[12px] text-text-tertiary">
+              <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">
                 {t("save_collection.no_collections")}
               </div>
             ) : (
@@ -182,27 +193,19 @@ export function SaveToCollectionModal({ onClose, onSaved, initialError }: Props)
         </div>
 
         {error && (
-          <div className="px-5 pb-2 text-[11px] text-error">{error}</div>
+          <div className="px-5 pb-2 text-[11px] text-destructive">{error}</div>
         )}
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border-light">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-[12px] rounded-apple hover:bg-surface-secondary transition-colors"
-          >
+        <DialogFooter className="border-t border-border px-5 py-4">
+          <Button variant="ghost" size="sm" onClick={onClose}>
             {t("common.cancel")}
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={!canSave}
-            className="px-3 py-1.5 bg-accent text-white text-[12px] rounded-apple hover:bg-accent-hover active:scale-[0.97] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          </Button>
+          <Button size="sm" onClick={onSubmit} disabled={!canSave}>
             {saving ? t("common.saving") : t("common.save")}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -233,7 +236,7 @@ function CollectionRow({
     <div className="text-[12px]">
       <div
         className={`flex items-center gap-1 px-2 py-1.5 cursor-pointer ${
-          isSelected ? "bg-accent/10 text-accent" : "hover:bg-surface-secondary"
+          isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
         }`}
         onClick={() =>
           onSelect({ kind: "collection", collectionId: collection.id })
@@ -244,13 +247,13 @@ function CollectionRow({
             e.stopPropagation();
             onToggle(collection.id);
           }}
-          className="w-4 h-4 flex items-center justify-center text-text-tertiary"
+          className="w-4 h-4 flex items-center justify-center text-muted-foreground"
         >
           {collection.folders.length > 0 ? (
             isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />
           ) : null}
         </button>
-        <Layers size={12} className="text-text-tertiary shrink-0" />
+        <Layers size={12} className="text-muted-foreground shrink-0" />
         <span className="truncate">{collection.name}</span>
       </div>
       {isOpen && collection.folders.length > 0 && (
@@ -302,7 +305,7 @@ function FolderRow({
     <div>
       <div
         className={`flex items-center gap-1 px-2 py-1.5 cursor-pointer ${
-          isSelected ? "bg-accent/10 text-accent" : "hover:bg-surface-secondary"
+          isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
         }`}
         style={{ paddingLeft: 8 + depth * 12 }}
         onClick={() =>
@@ -314,16 +317,16 @@ function FolderRow({
             e.stopPropagation();
             onToggleFolder(folder.id);
           }}
-          className="w-4 h-4 flex items-center justify-center text-text-tertiary"
+          className="w-4 h-4 flex items-center justify-center text-muted-foreground"
         >
           {folder.folders.length > 0 ? (
             isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />
           ) : null}
         </button>
         {isOpen ? (
-          <FolderOpen size={12} className="text-text-tertiary shrink-0" />
+          <FolderOpen size={12} className="text-muted-foreground shrink-0" />
         ) : (
-          <Folder size={12} className="text-text-tertiary shrink-0" />
+          <Folder size={12} className="text-muted-foreground shrink-0" />
         )}
         <span className="truncate">{folder.name}</span>
       </div>
