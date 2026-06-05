@@ -4,6 +4,15 @@ import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { Check, Loader2, AlertTriangle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AuthConfig } from "../types";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Shape of `DeviceCodeStartResult` returned by `oauth2_start_device_code`. */
 interface DeviceCodeStartResult {
@@ -68,20 +77,23 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
 
   return (
     <div className="space-y-3">
-      <div className="segmented-control">
-        {types.map((type) => (
-          <button
-            key={type}
-            onClick={() => onChange({ ...current, auth_type: type })}
-            className={`segment ${current.auth_type === type ? "segment-active" : ""}`}
-          >
-            {typeLabel(type)}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={current.auth_type}
+        onValueChange={(v) =>
+          onChange({ ...current, auth_type: v as AuthConfig["auth_type"] })
+        }
+      >
+        <TabsList className="h-auto flex-wrap justify-start">
+          {types.map((type) => (
+            <TabsTrigger key={type} value={type} className="text-[12px]">
+              {typeLabel(type)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {current.auth_type === "inherit" && (
-        <p className="text-[12px] text-text-tertiary">
+        <p className="text-[12px] text-muted-foreground">
           {inheritedFrom
             ? t("auth.inherits_from", { source: inheritedFrom })
             : t("auth.inherits_default")}
@@ -90,7 +102,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
 
       {current.auth_type === "bearer" && (
         <div className="space-y-2">
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.token")}</label>
+          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.token")}</label>
           <input
             type="text"
             value={current.bearer_token || ""}
@@ -105,7 +117,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
       {current.auth_type === "basic" && (
         <div className="space-y-2">
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.username")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.username")}</label>
             <input
               type="text"
               value={current.basic_username || ""}
@@ -115,7 +127,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.password")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.password")}</label>
             <input
               type="password"
               value={current.basic_password || ""}
@@ -130,7 +142,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
       {current.auth_type === "api_key" && (
         <div className="space-y-2">
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.key")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.key")}</label>
             <input
               type="text"
               value={current.api_key_key || ""}
@@ -140,7 +152,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.value")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.value")}</label>
             <input
               type="text"
               value={current.api_key_value || ""}
@@ -151,21 +163,23 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.add_to")}</label>
-            <div className="segmented-control mt-1">
-              <button
-                onClick={() => onChange({ ...current, api_key_in: "header" })}
-                className={`segment ${(current.api_key_in || "header") === "header" ? "segment-active" : ""}`}
-              >
-                {t("auth.in_header")}
-              </button>
-              <button
-                onClick={() => onChange({ ...current, api_key_in: "query" })}
-                className={`segment ${current.api_key_in === "query" ? "segment-active" : ""}`}
-              >
-                {t("auth.in_query")}
-              </button>
-            </div>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.add_to")}</label>
+            <Tabs
+              value={current.api_key_in || "header"}
+              onValueChange={(v) =>
+                onChange({ ...current, api_key_in: v as "header" | "query" })
+              }
+              className="mt-1"
+            >
+              <TabsList className="h-7">
+                <TabsTrigger value="header" className="!text-[12px]">
+                  {t("auth.in_header")}
+                </TabsTrigger>
+                <TabsTrigger value="query" className="!text-[12px]">
+                  {t("auth.in_query")}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </div>
       )}
@@ -178,7 +192,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.aws_access_key_id")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.aws_access_key_id")}</label>
               <input
                 type="text"
                 value={current.aws_access_key_id || ""}
@@ -189,7 +203,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.aws_secret")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.aws_secret")}</label>
               <input
                 type="password"
                 value={current.aws_secret_access_key || ""}
@@ -201,7 +215,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.aws_region")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.aws_region")}</label>
               <input
                 type="text"
                 value={current.aws_region || ""}
@@ -212,7 +226,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.aws_service")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.aws_service")}</label>
               <input
                 type="text"
                 value={current.aws_service || ""}
@@ -224,7 +238,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
             </div>
           </div>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.aws_session_token")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.aws_session_token")}</label>
             <input
               type="password"
               value={current.aws_session_token || ""}
@@ -233,7 +247,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               className="input-apple w-full font-mono text-[12px] mt-1"
             />
           </div>
-          <p className="text-[10px] text-text-tertiary leading-relaxed">
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
             {t("auth.sigv4_notice")}
           </p>
         </div>
@@ -243,7 +257,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.username")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.username")}</label>
               <input
                 type="text"
                 value={current.digest_username || ""}
@@ -254,7 +268,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.password")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.password")}</label>
               <input
                 type="password"
                 value={current.digest_password || ""}
@@ -264,7 +278,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
           </div>
-          <p className="text-[10px] text-text-tertiary leading-relaxed">
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
             {t("auth.digest_notice")}
           </p>
         </div>
@@ -274,7 +288,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_consumer_key")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_consumer_key")}</label>
               <input
                 type="text"
                 value={current.oauth1_consumer_key || ""}
@@ -284,7 +298,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_consumer_secret")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_consumer_secret")}</label>
               <input
                 type="password"
                 value={current.oauth1_consumer_secret || ""}
@@ -295,7 +309,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_token")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_token")}</label>
               <input
                 type="text"
                 value={current.oauth1_token || ""}
@@ -305,7 +319,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_token_secret")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_token_secret")}</label>
               <input
                 type="password"
                 value={current.oauth1_token_secret || ""}
@@ -316,19 +330,35 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_signature_method")}</label>
-              <select
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_signature_method")}</label>
+              <Select
                 value={current.oauth1_signature_method || "HMAC-SHA1"}
-                onChange={(e) => onChange({ ...current, oauth1_signature_method: e.target.value as AuthConfig["oauth1_signature_method"] })}
-                className="input-apple w-full text-[12px] mt-1"
+                onValueChange={(v) =>
+                  onChange({
+                    ...current,
+                    oauth1_signature_method:
+                      v as AuthConfig["oauth1_signature_method"],
+                  })
+                }
               >
-                <option value="HMAC-SHA1">HMAC-SHA1</option>
-                <option value="HMAC-SHA256">HMAC-SHA256</option>
-                <option value="PLAINTEXT">PLAINTEXT</option>
-              </select>
+                <SelectTrigger className="mt-1 h-9 w-full text-[12px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HMAC-SHA1" className="text-[12px]">
+                    HMAC-SHA1
+                  </SelectItem>
+                  <SelectItem value="HMAC-SHA256" className="text-[12px]">
+                    HMAC-SHA256
+                  </SelectItem>
+                  <SelectItem value="PLAINTEXT" className="text-[12px]">
+                    PLAINTEXT
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_realm")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_realm")}</label>
               <input
                 type="text"
                 value={current.oauth1_realm || ""}
@@ -338,15 +368,28 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth1_add_to")}</label>
-              <select
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth1_add_to")}</label>
+              <Select
                 value={current.oauth1_add_to || "header"}
-                onChange={(e) => onChange({ ...current, oauth1_add_to: e.target.value as "header" | "query" })}
-                className="input-apple w-full text-[12px] mt-1"
+                onValueChange={(v) =>
+                  onChange({
+                    ...current,
+                    oauth1_add_to: v as "header" | "query",
+                  })
+                }
               >
-                <option value="header">{t("auth.add_to_header")}</option>
-                <option value="query">{t("auth.add_to_query")}</option>
-              </select>
+                <SelectTrigger className="mt-1 h-9 w-full text-[12px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="header" className="text-[12px]">
+                    {t("auth.add_to_header")}
+                  </SelectItem>
+                  <SelectItem value="query" className="text-[12px]">
+                    {t("auth.add_to_query")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -356,19 +399,34 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_algorithm")}</label>
-              <select
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.jwt_algorithm")}</label>
+              <Select
                 value={current.jwt_algorithm || "HS256"}
-                onChange={(e) => onChange({ ...current, jwt_algorithm: e.target.value as AuthConfig["jwt_algorithm"] })}
-                className="input-apple w-full text-[12px] mt-1"
+                onValueChange={(v) =>
+                  onChange({
+                    ...current,
+                    jwt_algorithm: v as AuthConfig["jwt_algorithm"],
+                  })
+                }
               >
-                <option value="HS256">HS256</option>
-                <option value="HS384">HS384</option>
-                <option value="HS512">HS512</option>
-              </select>
+                <SelectTrigger className="mt-1 h-9 w-full text-[12px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HS256" className="text-[12px]">
+                    HS256
+                  </SelectItem>
+                  <SelectItem value="HS384" className="text-[12px]">
+                    HS384
+                  </SelectItem>
+                  <SelectItem value="HS512" className="text-[12px]">
+                    HS512
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_secret")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.jwt_secret")}</label>
               <input
                 type="password"
                 value={current.jwt_secret || ""}
@@ -378,17 +436,21 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
           </div>
-          <label className="flex items-center gap-2 text-[12px] text-text-secondary">
-            <input
-              type="checkbox"
+          <label
+            htmlFor="jwt-secret-base64"
+            className="flex cursor-pointer items-center gap-2 text-[12px] text-muted-foreground"
+          >
+            <Checkbox
+              id="jwt-secret-base64"
               checked={!!current.jwt_secret_is_base64}
-              onChange={(e) => onChange({ ...current, jwt_secret_is_base64: e.target.checked })}
-              className="rounded"
+              onCheckedChange={(c) =>
+                onChange({ ...current, jwt_secret_is_base64: c === true })
+              }
             />
             {t("auth.jwt_secret_is_base64")}
           </label>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_payload")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.jwt_payload")}</label>
             <textarea
               value={current.jwt_payload || ""}
               onChange={(e) => onChange({ ...current, jwt_payload: e.target.value })}
@@ -399,7 +461,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_request_header")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.jwt_request_header")}</label>
               <input
                 type="text"
                 value={current.jwt_request_header || ""}
@@ -410,7 +472,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.jwt_header_prefix")}</label>
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.jwt_header_prefix")}</label>
               <input
                 type="text"
                 value={current.jwt_header_prefix ?? "Bearer "}
@@ -424,7 +486,7 @@ export function AuthEditor({ value, onChange, allowInherit, inheritedFrom }: Pro
       )}
 
       {current.auth_type === "none" && (
-        <p className="text-[12px] text-text-tertiary">
+        <p className="text-[12px] text-muted-foreground">
           {allowInherit
             ? t("auth.none_explicit")
             : t("auth.none_default")}
@@ -660,38 +722,41 @@ function OAuth2Editor({
   return (
     <div className="space-y-2">
       <div>
-        <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_grant")}</label>
-        <div className="segmented-control mt-1">
-          <button
-            onClick={() => onChange({ ...value, oauth2_grant_type: "authorization_code" })}
-            className={`segment ${grant === "authorization_code" ? "segment-active" : ""}`}
-          >
-            {t("auth.oauth2_grant_authorization_code")}
-          </button>
-          <button
-            onClick={() => onChange({ ...value, oauth2_grant_type: "client_credentials" })}
-            className={`segment ${grant === "client_credentials" ? "segment-active" : ""}`}
-          >
-            {t("auth.oauth2_grant_client_credentials")}
-          </button>
-          <button
-            onClick={() => onChange({ ...value, oauth2_grant_type: "password" })}
-            className={`segment ${grant === "password" ? "segment-active" : ""}`}
-          >
-            {t("auth.oauth2_grant_password")}
-          </button>
-          <button
-            onClick={() => onChange({ ...value, oauth2_grant_type: "device_code" })}
-            className={`segment ${grant === "device_code" ? "segment-active" : ""}`}
-          >
-            {t("auth.oauth2_grant_device_code")}
-          </button>
-        </div>
+        <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_grant")}</label>
+        <Tabs
+          value={grant}
+          onValueChange={(v) =>
+            onChange({
+              ...value,
+              oauth2_grant_type: v as
+                | "authorization_code"
+                | "client_credentials"
+                | "password"
+                | "device_code",
+            })
+          }
+          className="mt-1"
+        >
+          <TabsList className="h-auto flex-wrap justify-start">
+            <TabsTrigger value="authorization_code" className="!text-[12px]">
+              {t("auth.oauth2_grant_authorization_code")}
+            </TabsTrigger>
+            <TabsTrigger value="client_credentials" className="!text-[12px]">
+              {t("auth.oauth2_grant_client_credentials")}
+            </TabsTrigger>
+            <TabsTrigger value="password" className="!text-[12px]">
+              {t("auth.oauth2_grant_password")}
+            </TabsTrigger>
+            <TabsTrigger value="device_code" className="!text-[12px]">
+              {t("auth.oauth2_grant_device_code")}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {grant === "device_code" && (
         <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_device_authorization_url")}</label>
+          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_device_authorization_url")}</label>
           <input
             type="text"
             value={value.oauth2_device_authorization_url || ""}
@@ -706,7 +771,7 @@ function OAuth2Editor({
       {grant === "authorization_code" && (
         <>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_authorization_url")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_authorization_url")}</label>
             <input
               type="text"
               value={value.oauth2_authorization_url || ""}
@@ -717,13 +782,14 @@ function OAuth2Editor({
             />
           </div>
           <div className="flex items-center gap-2">
-            <input
+            <Checkbox
               id="oauth2-use-pkce"
-              type="checkbox"
               checked={usePkce}
-              onChange={(e) => onChange({ ...value, oauth2_use_pkce: e.target.checked })}
+              onCheckedChange={(c) =>
+                onChange({ ...value, oauth2_use_pkce: c === true })
+              }
             />
-            <label htmlFor="oauth2-use-pkce" className="text-[12px] text-text-secondary">
+            <label htmlFor="oauth2-use-pkce" className="text-[12px] text-muted-foreground">
               {t("auth.oauth2_use_pkce")}
             </label>
           </div>
@@ -731,7 +797,7 @@ function OAuth2Editor({
       )}
 
       <div>
-        <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_token_url")}</label>
+        <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_token_url")}</label>
         <input
           type="text"
           value={value.oauth2_token_url || ""}
@@ -744,7 +810,7 @@ function OAuth2Editor({
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_client_id")}</label>
+          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_client_id")}</label>
           <input
             type="text"
             value={value.oauth2_client_id || ""}
@@ -755,7 +821,7 @@ function OAuth2Editor({
           />
         </div>
         <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_client_secret")}</label>
+          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_client_secret")}</label>
           <input
             type="password"
             value={value.oauth2_client_secret || ""}
@@ -769,7 +835,7 @@ function OAuth2Editor({
       {grant === "password" && (
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.username")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.username")}</label>
             <input
               type="text"
               value={value.oauth2_username || ""}
@@ -779,7 +845,7 @@ function OAuth2Editor({
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.password")}</label>
+            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.password")}</label>
             <input
               type="password"
               value={value.oauth2_password || ""}
@@ -792,7 +858,7 @@ function OAuth2Editor({
       )}
 
       <div>
-        <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_scope")}</label>
+        <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_scope")}</label>
         <input
           type="text"
           value={value.oauth2_scope || ""}
@@ -804,31 +870,39 @@ function OAuth2Editor({
       </div>
 
       <div>
-        <label className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">{t("auth.oauth2_client_auth")}</label>
-        <div className="segmented-control mt-1">
-          <button
-            onClick={() => onChange({ ...value, oauth2_client_auth: "basic" })}
-            className={`segment ${clientAuth === "basic" ? "segment-active" : ""}`}
-            title={t("auth.oauth2_client_auth_basic_tooltip")}
-          >
-            {t("auth.oauth2_client_auth_basic")}
-          </button>
-          <button
-            onClick={() => onChange({ ...value, oauth2_client_auth: "body" })}
-            className={`segment ${clientAuth === "body" ? "segment-active" : ""}`}
-            title={t("auth.oauth2_client_auth_body_tooltip")}
-          >
-            {t("auth.oauth2_client_auth_body")}
-          </button>
-        </div>
+        <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("auth.oauth2_client_auth")}</label>
+        <Tabs
+          value={clientAuth}
+          onValueChange={(v) =>
+            onChange({ ...value, oauth2_client_auth: v as "basic" | "body" })
+          }
+          className="mt-1"
+        >
+          <TabsList className="h-7">
+            <TabsTrigger
+              value="basic"
+              className="!text-[12px]"
+              title={t("auth.oauth2_client_auth_basic_tooltip")}
+            >
+              {t("auth.oauth2_client_auth_basic")}
+            </TabsTrigger>
+            <TabsTrigger
+              value="body"
+              className="!text-[12px]"
+              title={t("auth.oauth2_client_auth_body_tooltip")}
+            >
+              {t("auth.oauth2_client_auth_body")}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      <div className="pt-2 border-t border-border-light">
+      <div className="pt-2 border-t border-border">
         <button
           type="button"
           onClick={fetchToken}
           disabled={fetching}
-          className="px-3 py-1.5 text-[12px] bg-accent text-white rounded-md hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          className="px-3 py-1.5 text-[12px] bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
         >
           {fetching ? (
             <>
@@ -841,33 +915,33 @@ function OAuth2Editor({
         </button>
 
         {deviceInfo && (
-          <div className="mt-3 p-3 rounded-md border border-border bg-surface-secondary space-y-2">
+          <div className="mt-3 p-3 rounded-md border border-border bg-muted space-y-2">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 {t("auth.oauth2_device_user_code_label")}
               </span>
               <button
                 type="button"
                 onClick={() => navigator.clipboard.writeText(deviceInfo.user_code)}
-                className="text-[11px] text-accent hover:underline flex items-center gap-1"
+                className="text-[11px] text-primary hover:underline flex items-center gap-1"
               >
                 <Copy size={11} />
                 {t("auth.oauth2_device_copy_code")}
               </button>
             </div>
-            <div className="font-mono text-[18px] tracking-[0.25em] text-text-primary select-all">
+            <div className="font-mono text-[18px] tracking-[0.25em] text-foreground select-all">
               {deviceInfo.user_code}
             </div>
 
             <div className="flex items-baseline justify-between gap-2 pt-2">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 {t("auth.oauth2_device_verification_uri_label")}
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => navigator.clipboard.writeText(deviceInfo.verification_uri_complete || deviceInfo.verification_uri)}
-                  className="text-[11px] text-accent hover:underline flex items-center gap-1"
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1"
                 >
                   <Copy size={11} />
                   {t("auth.oauth2_device_copy_url")}
@@ -877,31 +951,31 @@ function OAuth2Editor({
                   onClick={() => {
                     void openExternal(deviceInfo.verification_uri_complete || deviceInfo.verification_uri);
                   }}
-                  className="text-[11px] text-accent hover:underline flex items-center gap-1"
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1"
                 >
                   <ExternalLink size={11} />
                   {t("auth.oauth2_device_open_browser")}
                 </button>
               </div>
             </div>
-            <div className="font-mono text-[12px] text-text-primary break-all select-all">
+            <div className="font-mono text-[12px] text-foreground break-all select-all">
               {deviceInfo.verification_uri}
             </div>
 
-            <p className="text-[11px] text-text-secondary pt-1">{t("auth.oauth2_device_instructions")}</p>
-            <p className="text-[11px] text-text-tertiary">
+            <p className="text-[11px] text-muted-foreground pt-1">{t("auth.oauth2_device_instructions")}</p>
+            <p className="text-[11px] text-muted-foreground">
               {t("auth.oauth2_device_expires_in", { minutes: Math.max(1, Math.round(deviceInfo.expires_in / 60)) })}
             </p>
 
-            <div className="flex items-center justify-between pt-2 border-t border-border-light">
-              <span className="text-[11px] text-text-secondary flex items-center gap-1.5">
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                 <Loader2 size={11} className="animate-spin" />
                 {t("auth.oauth2_device_polling")}
               </span>
               <button
                 type="button"
                 onClick={cancelDeviceFlow}
-                className="text-[11px] text-text-secondary hover:text-text-primary hover:underline"
+                className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
               >
                 {t("auth.oauth2_device_cancel")}
               </button>
@@ -910,7 +984,7 @@ function OAuth2Editor({
         )}
 
         {fetchError && (
-          <div className="mt-2 flex items-start gap-1.5 text-[11px] text-error">
+          <div className="mt-2 flex items-start gap-1.5 text-[11px] text-destructive">
             <AlertTriangle size={11} className="mt-0.5 shrink-0" />
             <span className="break-words">{fetchError}</span>
           </div>
@@ -924,15 +998,15 @@ function OAuth2Editor({
         )}
 
         {hasToken && (
-          <div className="mt-2 text-[11px] text-text-tertiary">
-            {t("auth.oauth2_cached_token")} <span className={isExpired ? "text-error" : "text-text-secondary"}>{tokenStatus}</span>
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            {t("auth.oauth2_cached_token")} <span className={isExpired ? "text-destructive" : "text-muted-foreground"}>{tokenStatus}</span>
             {value.oauth2_refresh_token && (
               <>
                 {" — "}
                 <button
                   type="button"
                   onClick={refreshToken}
-                  className="text-accent hover:underline"
+                  className="text-primary hover:underline"
                 >
                   {t("auth.oauth2_refresh")}
                 </button>
@@ -949,7 +1023,7 @@ function OAuth2Editor({
                   oauth2_refresh_token: undefined,
                 })
               }
-              className="text-accent hover:underline"
+              className="text-primary hover:underline"
             >
               {t("auth.oauth2_clear")}
             </button>

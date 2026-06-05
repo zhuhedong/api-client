@@ -7,3 +7,6 @@
 # Playwright artefacts (generated each run).
 /playwright-report
 /test-results
+
+# Local npm cache (offline installs).
+/.npm-cache

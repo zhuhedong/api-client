@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Plus, Trash2, Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react";
 import type { EnvVariable } from "../types";
 import { VariablePreview } from "./VariablePreview";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * Tabular editor for a list of `EnvVariable`. Used by both `EnvironmentPanel`
@@ -57,7 +60,7 @@ export function VariablesEditor({
   return (
     <div className="space-y-1.5">
       {value.length === 0 && (
-        <p className="text-[12px] text-text-tertiary italic">
+        <p className="text-[12px] text-muted-foreground italic">
           {emptyHint ?? t("env.no_variables")}
         </p>
       )}
@@ -74,7 +77,7 @@ export function VariablesEditor({
       <button
         type="button"
         onClick={add}
-        className="flex items-center gap-1.5 text-[12px] text-accent hover:text-accent-hover mt-2"
+        className="flex items-center gap-1.5 text-[12px] text-primary hover:text-primary/90 mt-2"
       >
         <Plus size={13} />
         {t("env.add_variable")}
@@ -88,7 +91,7 @@ export function VariablesEditor({
 function VariableHeader() {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-2 px-1 pb-1 text-[10px] uppercase tracking-wide text-text-tertiary font-medium">
+    <div className="flex items-center gap-2 px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
       <span className="w-4 shrink-0" />
       <span className="w-[180px] shrink-0">{t("env.column_key")}</span>
       <span className="flex-1 min-w-0">{t("env.column_value")}</span>
@@ -122,30 +125,29 @@ function VariableRow({
 
   return (
     <div className="flex items-start gap-2">
-      <input
-        type="checkbox"
+      <Checkbox
         checked={variable.enabled}
-        onChange={(e) => onChange({ enabled: e.target.checked })}
-        className="w-4 h-4 rounded accent-accent mt-1.5"
+        onCheckedChange={(c) => onChange({ enabled: c === true })}
+        className="mt-1.5"
         title={t("env.toggle_enabled")}
       />
-      <input
+      <Input
         type="text"
         value={variable.key}
         onChange={(e) => onChange({ key: e.target.value })}
         placeholder={t("env.key_placeholder")}
         spellCheck={false}
-        className="input-apple w-[180px] shrink-0 text-[12px] py-1 font-mono"
+        className="h-7 w-[180px] shrink-0 font-mono text-[12px]"
       />
       <div className="relative flex-1 min-w-0">
         {expanded ? (
-          <textarea
+          <Textarea
             value={variable.value}
             onChange={(e) => onChange({ value: e.target.value })}
             placeholder={t("env.value_placeholder")}
             spellCheck={false}
             rows={Math.min(8, Math.max(2, variable.value.split("\n").length))}
-            className="input-apple w-full text-[12px] py-1.5 font-mono resize-y leading-snug"
+            className="min-h-0 w-full resize-y py-1.5 font-mono text-[12px] leading-snug"
             // Visually mask the value if it's a secret + hide is requested;
             // textareas don't have type="password" so we hand-roll it via
             // the `webkit-text-security` style. Falls back to plaintext on
@@ -160,13 +162,13 @@ function VariableRow({
             }
           />
         ) : (
-          <input
+          <Input
             type={showValue || !variable.is_secret ? "text" : "password"}
             value={variable.value}
             onChange={(e) => onChange({ value: e.target.value })}
             placeholder={t("env.value_placeholder")}
             spellCheck={false}
-            className="input-apple w-full text-[12px] py-1 font-mono"
+            className="h-7 w-full font-mono text-[12px]"
             // Don't leak masked secrets through the native browser tooltip.
             // When a secret is hidden the input shows dots; without this
             // guard a hover on the field would still reveal the plaintext.
@@ -202,7 +204,7 @@ function VariableRow({
           className={`px-1.5 h-6 rounded text-[10px] font-semibold transition-colors leading-none ${
             variable.is_secret
               ? "bg-warning/15 text-warning"
-              : "bg-surface-secondary text-text-tertiary hover:text-text-secondary"
+              : "bg-muted text-muted-foreground hover:text-muted-foreground"
           }`}
           title={
             variable.is_secret ? t("env.secret_on") : t("env.secret_off")
@@ -213,9 +215,9 @@ function VariableRow({
         <IconButton
           onClick={onDelete}
           title={t("env.delete_variable")}
-          hoverClass="hover:bg-error/10"
+          hoverClass="hover:bg-destructive/10"
         >
-          <Trash2 size={12} className="text-error/70" />
+          <Trash2 size={12} className="text-destructive/70" />
         </IconButton>
       </div>
     </div>
@@ -228,7 +230,7 @@ function IconButton({
   children,
   onClick,
   title,
-  hoverClass = "hover:bg-black/5 dark:hover:bg-white/10",
+  hoverClass = "hover:bg-accent",
 }: {
   children: React.ReactNode;
   onClick: () => void;
@@ -239,7 +241,7 @@ function IconButton({
     <button
       type="button"
       onClick={onClick}
-      className={`w-6 h-6 flex items-center justify-center rounded text-text-tertiary transition-colors ${hoverClass}`}
+      className={`w-6 h-6 flex items-center justify-center rounded text-muted-foreground transition-colors ${hoverClass}`}
       title={title}
     >
       {children}

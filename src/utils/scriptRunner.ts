@@ -23,6 +23,10 @@ export interface ScriptRunInput {
   variables: Record<string, string>;
   /** Iteration data row (CSV-driven runs). Read-only inside scripts. */
   iterationData?: Record<string, string>;
+  /** Cookie jar snapshot (name→value) exposed read-only as `pm.cookies`. */
+  cookies?: Record<string, string>;
+  /** Request metadata exposed as `pm.info`. */
+  info?: { requestName?: string; requestId?: string; iteration?: number };
   /** Wall-clock deadline in ms. Default 5000. */
   timeoutMs?: number;
 }
@@ -188,6 +192,8 @@ export async function runScript(input: ScriptRunInput): Promise<ScriptRunResult>
         collectionVariables: input.collectionVariables,
         variables: input.variables,
         iterationData: input.iterationData ?? {},
+        cookies: input.cookies ?? {},
+        info: input.info ?? {},
       },
     });
   });

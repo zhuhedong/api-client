@@ -59,8 +59,8 @@ export function VariablePreview({ value, vars }: VariablePreviewProps) {
         onMouseLeave={() => setOpen(false)}
         onClick={() => setOpen((v) => !v)}
         className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
-          anyUnresolved ? "text-warning" : "text-accent"
-        } hover:bg-black/5 dark:hover:bg-white/10`}
+          anyUnresolved ? "text-warning" : "text-primary"
+        } hover:bg-accent`}
         title={
           anyUnresolved
             ? t("variable_preview.has_unresolved")
@@ -70,26 +70,26 @@ export function VariablePreview({ value, vars }: VariablePreviewProps) {
         <Eye size={14} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-[420px] max-h-[320px] overflow-auto z-50 rounded-apple-lg border border-border-light bg-surface shadow-apple-lg p-3 text-[11px]">
-          <div className="font-semibold text-text-secondary mb-1">
+        <div className="absolute right-0 top-full mt-1 w-[420px] max-h-[320px] overflow-auto z-50 rounded-xl border border-border bg-card shadow-lg p-3 text-[11px]">
+          <div className="font-semibold text-muted-foreground mb-1">
             {t("variable_preview.resolved_value")}
           </div>
-          <div className="font-mono text-text-primary break-all bg-surface-secondary rounded-apple p-2 mb-2 whitespace-pre-wrap">
+          <div className="font-mono text-foreground break-all bg-muted rounded-lg p-2 mb-2 whitespace-pre-wrap">
             {resolved || t("variable_preview.empty")}
           </div>
-          <div className="font-semibold text-text-secondary mb-1">
+          <div className="font-semibold text-muted-foreground mb-1">
             {t("variable_preview.variables_n", { count: tokens.length })}
           </div>
-          <div className="divide-y divide-border-light">
+          <div className="divide-y divide-border-border">
             {tokens.map((k) => {
               const unresolved = isUnresolved(k);
               const v = vars[k];
               return (
                 <div key={k} className="flex items-start gap-2 py-1">
                   <span
-                    className={`font-mono shrink-0 ${unresolved ? "text-warning" : "text-accent"}`}
+                    className={`font-mono shrink-0 ${unresolved ? "text-warning" : "text-primary"}`}
                   >{`{{${k}}}`}</span>
-                  <span className="font-mono text-text-secondary break-all flex-1 text-right">
+                  <span className="font-mono text-muted-foreground break-all flex-1 text-right">
                     {unresolved
                       ? k.startsWith("$")
                         ? t("variable_preview.unknown_dynamic")

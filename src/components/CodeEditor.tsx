@@ -15,6 +15,12 @@ export interface CodeEditorProps {
   readOnly?: boolean;
   autoFocus?: boolean;
   className?: string;
+  /** Variable names offered as `{{name}}` autocompletions while typing after
+   *  `{{`. Pass the resolved scope keys; an empty/omitted list disables it. */
+  completions?: string[];
+  /** GraphQL schema identifiers (type / field names) offered as completions in
+   *  a graphql editor. Best-effort flat name matching, not grammar-aware. */
+  graphqlFields?: string[];
 }
 
 // CodeMirror + language modes weigh in around ~600 kB minified. Lazy-load
@@ -38,7 +44,7 @@ function Fallback(props: CodeEditorProps) {
       placeholder={placeholder}
       spellCheck={false}
       style={style}
-      className={`w-full rounded-apple border border-border-light bg-surface px-2 py-1.5 font-mono text-[12px] leading-relaxed resize-none focus:outline-none ${className ?? ""}`}
+      className={`w-full rounded-lg border border-border bg-card px-2 py-1.5 font-mono text-[12px] leading-relaxed resize-none focus:outline-none ${className ?? ""}`}
     />
   );
 }

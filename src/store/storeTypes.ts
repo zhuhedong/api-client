@@ -82,6 +82,9 @@ export interface RequestState {
   defaultMaxRedirects: number;
   /** Default proxy URL when a request doesn't override it. Empty string = no proxy. */
   defaultProxyUrl: string;
+  /** In-memory (non-persisted) toggle: when true, every send runs the
+   *  DNS/TCP/TLS connection probe and reports the phase breakdown. */
+  profileTiming: boolean;
 
   /** Cached response snapshots reconstructed from the history table,
    *  keyed by history entry id. Populated lazily on `initialize` /
@@ -239,6 +242,7 @@ export interface RequestState {
   setDefaultRedirectPolicy: (policy: "follow" | "none" | "manual") => Promise<void>;
   setDefaultMaxRedirects: (n: number) => Promise<void>;
   setDefaultProxyUrl: (url: string) => Promise<void>;
+  setProfileTiming: (on: boolean) => void;
   /** Save the active tab to its source collection (in-place) when it already
    *  has `collectionId`, or to the named collection/folder otherwise. The
    *  caller is responsible for prompting the user when there's no source

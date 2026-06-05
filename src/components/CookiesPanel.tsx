@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   X,
@@ -13,6 +12,13 @@ import {
 import { useRequestStore } from "../store/useRequestStore";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { CookieEntry } from "../types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 /** Fixed-length dot mask for hidden cookie values. Picked to be wide enough
  *  to look "filled" but not so wide it shifts layout. Crucially, this is a
@@ -90,77 +96,76 @@ export function CookiesPanel({ onClose }: { onClose: () => void }) {
     setPendingClear(null);
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-apple-lg shadow-apple-lg w-[960px] max-w-[92vw] h-[80vh] max-h-[80vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-light shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <Cookie size={18} className="text-accent shrink-0" />
-            <h2 className="text-[15px] font-semibold text-text-primary">
-              {t("cookies.title")}
-            </h2>
-            <span className="text-[11px] text-text-tertiary tabular-nums">
-              {t("cookies.total_count", {
-                count: cookies.length,
-              })}
-            </span>
-            {query && cookies.length > 0 && (
-              <span className="text-[11px] text-text-tertiary tabular-nums">
-                · {t("cookies.matching_count", { count: visibleCount })}
+  return (
+    <>
+      <Dialog
+        open
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+      >
+        <DialogContent className="flex h-[80vh] max-h-[80vh] w-[92vw] max-w-[960px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="flex-row items-center justify-between space-y-0 border-b border-border px-5 py-4 pr-12 text-left">
+            <div className="flex min-w-0 items-center gap-2">
+              <Cookie size={18} className="shrink-0 text-primary" />
+              <DialogTitle className="text-[15px]">
+                {t("cookies.title")}
+              </DialogTitle>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {t("cookies.total_count", { count: cookies.length })}
               </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowValues((v) => !v)}
-              className="px-2 py-1 text-[11px] text-text-secondary rounded-md hover:bg-surface-secondary transition-colors flex items-center gap-1"
-              title={
-                showValues
-                  ? t("cookies.hide_values_tooltip")
-                  : t("cookies.show_values_tooltip")
-              }
-            >
-              {showValues ? <Eye size={11} /> : <EyeOff size={11} />}
-              {showValues ? t("cookies.values_shown") : t("cookies.values_hidden")}
-            </button>
-            <button
-              onClick={() => setPendingClear("all")}
-              disabled={cookies.length === 0}
-              className="px-2 py-1 text-[11px] text-error rounded-md hover:bg-error/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              {t("cookies.clear_all")}
-            </button>
-            <button
-              onClick={onClose}
-              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-secondary transition-colors"
-              title={t("common.close")}
-            >
-              <X size={16} className="text-text-tertiary" />
-            </button>
-          </div>
-        </div>
+              {query && cookies.length > 0 && (
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  · {t("cookies.matching_count", { count: visibleCount })}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowValues((v) => !v)}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+                title={
+                  showValues
+                    ? t("cookies.hide_values_tooltip")
+                    : t("cookies.show_values_tooltip")
+                }
+              >
+                {showValues ? <Eye size={11} /> : <EyeOff size={11} />}
+                {showValues
+                  ? t("cookies.values_shown")
+                  : t("cookies.values_hidden")}
+              </button>
+              <button
+                onClick={() => setPendingClear("all")}
+                disabled={cookies.length === 0}
+                className="rounded-md px-2 py-1 text-[11px] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                {t("cookies.clear_all")}
+              </button>
+            </div>
+          </DialogHeader>
 
-        <div className="px-5 py-3 border-b border-border-light shrink-0">
+        <div className="px-5 py-3 border-b border-border shrink-0">
           <div className="relative">
             <Search
               size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
             />
-            <input
+            <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("cookies.search_placeholder")}
-              className="input-apple w-full text-[12px] py-[5px] pl-8 pr-8"
+              className="h-8 w-full pl-8 pr-8 text-[12px]"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-secondary"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted"
                 title={t("common.clear")}
               >
-                <X size={11} className="text-text-tertiary" />
+                <X size={11} className="text-muted-foreground" />
               </button>
             )}
           </div>
@@ -168,29 +173,29 @@ export function CookiesPanel({ onClose }: { onClose: () => void }) {
 
         <div className="flex-1 overflow-auto px-5 py-3 space-y-3">
           {grouped.length === 0 && (
-            <div className="text-center py-12 text-[12px] text-text-tertiary">
+            <div className="text-center py-12 text-[12px] text-muted-foreground">
               {cookies.length === 0
                 ? t("cookies.empty")
                 : t("cookies.no_matches")}
             </div>
           )}
           {grouped.map(([domain, list]) => (
-            <div key={domain} className="bg-surface-secondary rounded-apple p-3">
+            <div key={domain} className="bg-muted rounded-lg p-3">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <span
-                    className="text-[12px] font-semibold text-text-primary truncate"
+                    className="text-[12px] font-semibold text-foreground truncate"
                     title={domain}
                   >
                     {domain}
                   </span>
-                  <span className="text-[11px] text-text-tertiary tabular-nums shrink-0">
+                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                     {t("cookies.cookie_count", { count: list.length })}
                   </span>
                 </div>
                 <button
                   onClick={() => setPendingClear(domain)}
-                  className="text-[11px] text-error hover:text-error/80 transition-colors shrink-0"
+                  className="text-[11px] text-destructive hover:text-destructive/80 transition-colors shrink-0"
                 >
                   {t("cookies.clear_domain")}
                 </button>
@@ -208,7 +213,8 @@ export function CookiesPanel({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={pendingClear !== null}
@@ -228,8 +234,7 @@ export function CookiesPanel({ onClose }: { onClose: () => void }) {
         onConfirm={handleConfirmClear}
         onCancel={() => setPendingClear(null)}
       />
-    </div>,
-    document.body,
+    </>
   );
 }
 
@@ -278,12 +283,12 @@ function CookieRow({
 
   return (
     <div
-      className={`group grid grid-cols-[180px_minmax(0,1fr)_auto] items-start gap-2 px-2 py-1.5 bg-surface rounded text-[11px] ${
+      className={`group grid grid-cols-[180px_minmax(0,1fr)_auto] items-start gap-2 px-2 py-1.5 bg-card rounded text-[11px] ${
         expired ? "opacity-60" : ""
       }`}
     >
       <span
-        className="font-mono text-text-primary truncate"
+        className="font-mono text-foreground truncate"
         title={cookie.name}
       >
         {cookie.name}
@@ -291,7 +296,7 @@ function CookieRow({
       <div className="min-w-0">
         <div
           className={`font-mono break-all ${
-            visible ? "text-text-secondary" : "text-text-tertiary tracking-wider"
+            visible ? "text-muted-foreground" : "text-muted-foreground tracking-wider"
           }`}
           // When hidden, render a fixed-length dot run (never derived from
           // `cookie.value.length`) so we don't leak length / shape. The
@@ -301,7 +306,7 @@ function CookieRow({
         >
           {visible ? cookie.value : "•".repeat(MASK_LENGTH)}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[10px] text-text-tertiary">
+        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[10px] text-muted-foreground">
           <span className="font-mono">{cookie.path}</span>
           <span>·</span>
           <span>{expiryLabel}</span>
@@ -312,7 +317,7 @@ function CookieRow({
             <span className="text-orange">· {t("cookies.flag_http_only")}</span>
           )}
           {expired && (
-            <span className="text-error flex items-center gap-0.5">
+            <span className="text-destructive flex items-center gap-0.5">
               · <ShieldAlert size={10} /> {t("cookies.flag_expired")}
             </span>
           )}
@@ -321,7 +326,7 @@ function CookieRow({
       <div className="flex items-center gap-0.5 shrink-0">
         <button
           onClick={() => setOverride((v) => !v)}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-surface-secondary rounded transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-all"
           title={
             visible
               ? t("cookies.hide_value_tooltip")
@@ -329,17 +334,17 @@ function CookieRow({
           }
         >
           {visible ? (
-            <Eye size={11} className="text-text-tertiary" />
+            <Eye size={11} className="text-muted-foreground" />
           ) : (
-            <EyeOff size={11} className="text-text-tertiary" />
+            <EyeOff size={11} className="text-muted-foreground" />
           )}
         </button>
         <button
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-error/10 rounded transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
           title={t("cookies.delete_cookie_tooltip")}
         >
-          <Trash2 size={11} className="text-error/70" />
+          <Trash2 size={11} className="text-destructive/70" />
         </button>
       </div>
     </div>

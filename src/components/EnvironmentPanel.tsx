@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   Plus,
@@ -20,6 +19,13 @@ import {
   downloadEnvironmentJson,
   parseImportFile,
 } from "../utils/envIo";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 /** Show the search box once the env list crosses this length — it'd just
  *  be noise for a workspace with a handful of environments. */
@@ -185,51 +191,47 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
   // containing block. Without the portal, the `position: fixed` modal
   // is sized to the sidebar's bounding box (~256px wide) and renders
   // visibly clipped — the exact "display incomplete" bug we're fixing.
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-apple-lg shadow-apple-lg w-[1024px] max-w-[92vw] h-[85vh] max-h-[85vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-light shrink-0">
-          <div className="flex items-center gap-2">
-            <Globe size={18} className="text-accent" />
-            <h2 className="text-[15px] font-semibold text-text-primary">
+  return (
+    <>
+      <Dialog
+        open
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+      >
+        <DialogContent className="flex h-[85vh] max-h-[85vh] w-[92vw] max-w-[1024px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-5 py-4 pr-12 text-left">
+            <DialogTitle className="flex items-center gap-2 text-[15px]">
+              <Globe size={18} className="text-primary" />
               {t("env.panel_title")}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-secondary transition-colors"
-            title={t("common.close")}
-          >
-            <X size={16} className="text-text-tertiary" />
-          </button>
-        </div>
+            </DialogTitle>
+          </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Env list */}
-          <div className="w-60 shrink-0 border-r border-border-light flex flex-col overflow-hidden">
+          <div className="w-60 shrink-0 border-r border-border flex flex-col overflow-hidden">
             {showSearch && (
-              <div className="p-2 border-b border-border-light shrink-0">
+              <div className="p-2 border-b border-border shrink-0">
                 <div className="relative">
                   <SearchIcon
                     size={12}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
                   />
-                  <input
+                  <Input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t("env.search_placeholder")}
-                    className="input-apple w-full text-[12px] py-1 pl-7 pr-7"
+                    className="h-7 w-full pl-7 pr-7 text-[12px]"
                   />
                   {search && (
                     <button
                       type="button"
                       onClick={() => setSearch("")}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-secondary"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted"
                       title={t("common.clear")}
                     >
-                      <X size={11} className="text-text-tertiary" />
+                      <X size={11} className="text-muted-foreground" />
                     </button>
                   )}
                 </div>
@@ -237,12 +239,12 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
             )}
             <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {environments.length === 0 && (
-                <p className="text-[12px] text-text-tertiary italic px-2 py-3">
+                <p className="text-[12px] text-muted-foreground italic px-2 py-3">
                   {t("env.empty_list")}
                 </p>
               )}
               {environments.length > 0 && filteredEnvironments.length === 0 && (
-                <p className="text-[12px] text-text-tertiary italic px-2 py-3">
+                <p className="text-[12px] text-muted-foreground italic px-2 py-3">
                   {t("env.no_search_results")}
                 </p>
               )}
@@ -256,14 +258,14 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
                     title={env.name}
                     className={`group flex items-center gap-1 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
                       isSelected
-                        ? "bg-accent/10"
-                        : "hover:bg-surface-secondary"
+                        ? "bg-primary/10"
+                        : "hover:bg-muted"
                     }`}
                   >
-                    <span className="text-[12px] text-text-primary truncate flex-1 min-w-0">
+                    <span className="text-[12px] text-foreground truncate flex-1 min-w-0">
                       {env.name}
                     </span>
-                    <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
                       {env.variables.length}
                     </span>
                     {isActive && (
@@ -275,65 +277,65 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
                           e.stopPropagation();
                           void handleDuplicate(env.id);
                         }}
-                        className="p-0.5 hover:bg-accent/10 rounded"
+                        className="p-0.5 hover:bg-primary/10 rounded"
                         title={t("env.duplicate_env_tooltip")}
                       >
-                        <Copy size={11} className="text-text-tertiary" />
+                        <Copy size={11} className="text-muted-foreground" />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleExport(env.id);
                         }}
-                        className="p-0.5 hover:bg-accent/10 rounded"
+                        className="p-0.5 hover:bg-primary/10 rounded"
                         title={t("env.export_env_tooltip")}
                       >
-                        <Download size={11} className="text-text-tertiary" />
+                        <Download size={11} className="text-muted-foreground" />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setPendingDeleteId(env.id);
                         }}
-                        className="p-0.5 hover:bg-error/10 rounded"
+                        className="p-0.5 hover:bg-destructive/10 rounded"
                         title={t("env.delete_env_tooltip")}
                       >
-                        <Trash2 size={11} className="text-error/70" />
+                        <Trash2 size={11} className="text-destructive/70" />
                       </button>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="p-2 border-t border-border-light space-y-1">
+            <div className="p-2 border-t border-border space-y-1">
               {importError && (
                 <p
-                  className="text-[11px] text-error px-1 break-words"
+                  className="text-[11px] text-destructive px-1 break-words"
                   role="alert"
                 >
                   {importError}
                 </p>
               )}
               <div className="flex items-center gap-1">
-                <input
+                <Input
                   type="text"
                   value={newEnvName}
                   onChange={(e) => setNewEnvName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddEnv()}
                   placeholder={t("env.new_env_placeholder")}
-                  className="input-apple flex-1 min-w-0 text-[12px] py-1"
+                  className="h-7 min-w-0 flex-1 text-[12px]"
                 />
                 <button
                   onClick={handleAddEnv}
                   disabled={!newEnvName.trim()}
-                  className="p-1.5 hover:bg-accent/10 rounded-md transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="p-1.5 hover:bg-primary/10 rounded-md transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                   title={t("env.add_env_tooltip")}
                 >
-                  <Plus size={13} className="text-accent" />
+                  <Plus size={13} className="text-primary" />
                 </button>
                 <button
                   onClick={handleImportClick}
-                  className="p-1.5 hover:bg-accent/10 rounded-md transition-colors text-text-tertiary hover:text-accent"
+                  className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary"
                   title={t("env.import_env_tooltip")}
                 >
                   <Upload size={13} />
@@ -355,15 +357,15 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
           <div className="flex-1 flex flex-col overflow-hidden min-w-0">
             {editingEnv ? (
               <>
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border-light shrink-0">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <span
-                      className="text-[13px] font-medium text-text-primary truncate"
+                      className="text-[13px] font-medium text-foreground truncate"
                       title={editingEnv.name}
                     >
                       {editingEnv.name}
                     </span>
-                    <span className="text-[11px] text-text-tertiary shrink-0">
+                    <span className="text-[11px] text-muted-foreground shrink-0">
                       {t("env.variable_count", {
                         count: editingEnv.variables.length,
                       })}
@@ -378,7 +380,7 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
                     className={`text-[11px] font-medium px-3 py-1 rounded-md transition-colors shrink-0 ${
                       activeEnvId === editingEnv.id
                         ? "bg-success/15 text-success"
-                        : "bg-accent/10 text-accent hover:bg-accent/20"
+                        : "bg-primary/10 text-primary hover:bg-primary/20"
                     }`}
                   >
                     {activeEnvId === editingEnv.id
@@ -398,13 +400,14 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-text-tertiary text-[12px]">
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-[12px]">
                 {t("env.select_or_create")}
               </div>
             )}
           </div>
         </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={pendingDeleteEnv !== undefined}
@@ -416,7 +419,6 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDeleteId(null)}
       />
-    </div>,
-    document.body,
+    </>
   );
 }

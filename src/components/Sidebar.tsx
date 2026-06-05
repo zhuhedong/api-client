@@ -32,6 +32,7 @@ import { insomniaToCollections } from "../utils/insomnia";
 import { harToCollection } from "../utils/har";
 import { httpFileToCollection } from "../utils/http-file";
 import { CollectionAuthModal } from "./CollectionAuthModal";
+import { CollectionSettingsModal } from "./CollectionSettingsModal";
 import { CollectionRunnerModal } from "./CollectionRunnerModal";
 import { SidebarHistoryTab } from "./SidebarHistoryTab";
 import { SidebarRecentTab } from "./SidebarRecentTab";
@@ -42,6 +43,15 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { CollectionTreeView } from "./CollectionTree";
 import { setThemeMode } from "../utils/theme";
 import { useDarkMode } from "../utils/useDarkMode";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /** Heuristic format sniffers used by `handleImportFile`. */
 function isHar(d: unknown): boolean {
@@ -82,9 +92,8 @@ export function Sidebar() {
   const [showEnvDropdown, setShowEnvDropdown] = useState(false);
   const [envSearch, setEnvSearch] = useState("");
   const [editingAuthCollectionId, setEditingAuthCollectionId] = useState<string | null>(null);
+  const [settingsCollectionId, setSettingsCollectionId] = useState<string | null>(null);
   const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
-  /** id of the collection whose export-format dropdown is currently open, or null. */
-  const [exportMenuColId, setExportMenuColId] = useState<string | null>(null);
   const [variableScope, setVariableScope] = useState<
     { kind: "global" } | { kind: "collection"; collectionId: string } | null
   >(null);
@@ -274,39 +283,39 @@ export function Sidebar() {
   };
 
   return (
-    <div className="w-full bg-sidebar backdrop-blur-xl border-r border-border-light flex flex-col h-full">
+    <div className="w-full bg-card backdrop-blur-xl border-r border-border flex flex-col h-full">
       {/* Drag region + title */}
       <div className="pt-5 px-4 pb-3">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-[15px] font-semibold text-text-primary tracking-tight">API Client</h1>
+          <h1 className="text-[15px] font-semibold text-foreground tracking-tight">API Client</h1>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => setShowCookies(true)}
-              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-accent active:scale-95 transition-all cursor-pointer"
               title={t("sidebar.cookies")}
             >
-              <Cookie size={14} className="text-text-secondary" />
+              <Cookie size={14} className="text-muted-foreground" />
             </button>
             <button
               onClick={() => setShowMockServer(true)}
-              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-accent active:scale-95 transition-all cursor-pointer"
               title={t("sidebar.mock_server")}
             >
-              <Server size={14} className="text-text-secondary" />
+              <Server size={14} className="text-muted-foreground" />
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-accent active:scale-95 transition-all cursor-pointer"
               title={t("settings.settings")}
             >
-              <SettingsIcon size={14} className="text-text-secondary" />
+              <SettingsIcon size={14} className="text-muted-foreground" />
             </button>
             <button
               onClick={toggleDark}
-              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-accent active:scale-95 transition-all cursor-pointer"
               title={t(dark ? "sidebar.light_mode" : "sidebar.dark_mode")}
             >
-              {dark ? <Sun size={14} className="text-text-secondary" /> : <Moon size={14} className="text-text-secondary" />}
+              {dark ? <Sun size={14} className="text-muted-foreground" /> : <Moon size={14} className="text-muted-foreground" />}
             </button>
             <button
               onClick={(e) => {
@@ -314,10 +323,10 @@ export function Sidebar() {
                 e.preventDefault();
                 createNewRequest();
               }}
-              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all cursor-pointer"
+              className="relative z-10 w-7 h-7 flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all cursor-pointer"
               title={t("sidebar.new_request")}
             >
-              <Plus size={15} className="text-accent" strokeWidth={2.2} />
+              <Plus size={15} className="text-primary" strokeWidth={2.2} />
             </button>
           </div>
         </div>
@@ -331,13 +340,13 @@ export function Sidebar() {
         <div className="relative mb-3" data-env-dropdown>
           <button
             onClick={() => setShowEnvDropdown((v) => !v)}
-            className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-surface-secondary hover:bg-surface-secondary/70 rounded-lg text-[12px] text-text-secondary transition-colors"
+            className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-muted hover:bg-muted/70 rounded-lg text-[12px] text-muted-foreground transition-colors"
           >
             <span className="flex items-center gap-1.5 truncate">
-              <Globe size={12} className="text-accent shrink-0" />
+              <Globe size={12} className="text-primary shrink-0" />
               <span className="truncate">{activeEnv ? activeEnv.name : t("sidebar.no_active_environment")}</span>
             </span>
-            <ChevronDown size={11} className="text-text-tertiary shrink-0" />
+            <ChevronDown size={11} className="text-muted-foreground shrink-0" />
           </button>
           {showEnvDropdown && (
             // Decoupled from the trigger's width so longer env names + the
@@ -358,7 +367,7 @@ export function Sidebar() {
                   setShowEnvPanel(true);
                   setShowEnvDropdown(false);
                 }}
-                className="block w-full text-left px-3 py-1.5 text-[12px] text-accent hover:bg-accent/10 transition-colors border-t border-border-light"
+                className="block w-full text-left px-3 py-1.5 text-[12px] text-primary hover:bg-primary/10 transition-colors border-t border-border"
               >
                 {t("sidebar.manage_environments")}
               </button>
@@ -367,7 +376,7 @@ export function Sidebar() {
                   setVariableScope({ kind: "global" });
                   setShowEnvDropdown(false);
                 }}
-                className="block w-full text-left px-3 py-1.5 text-[12px] text-accent hover:bg-accent/10 transition-colors"
+                className="block w-full text-left px-3 py-1.5 text-[12px] text-primary hover:bg-primary/10 transition-colors"
                 title={t("sidebar.global_variables_tooltip")}
               >
                 {t("sidebar.global_variables")}
@@ -377,26 +386,24 @@ export function Sidebar() {
         </div>
 
         {/* Segmented Control */}
-        <div className="segmented-control w-full">
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`segment flex-1 ${activeTab === "history" ? "segment-active" : ""}`}
-          >
-            {t("sidebar.history")}
-          </button>
-          <button
-            onClick={() => setActiveTab("collections")}
-            className={`segment flex-1 ${activeTab === "collections" ? "segment-active" : ""}`}
-          >
-            {t("sidebar.collections")}
-          </button>
-          <button
-            onClick={() => setActiveTab("recent")}
-            className={`segment flex-1 ${activeTab === "recent" ? "segment-active" : ""}`}
-          >
-            {t("sidebar.recent")}
-          </button>
-        </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) =>
+            setActiveTab(v as "history" | "collections" | "recent")
+          }
+        >
+          <TabsList className="w-full">
+            <TabsTrigger value="history" className="flex-1 text-[12px]">
+              {t("sidebar.history")}
+            </TabsTrigger>
+            <TabsTrigger value="collections" className="flex-1 text-[12px]">
+              {t("sidebar.collections")}
+            </TabsTrigger>
+            <TabsTrigger value="recent" className="flex-1 text-[12px]">
+              {t("sidebar.recent")}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -413,7 +420,7 @@ export function Sidebar() {
             <div className="px-0.5 pb-2">
               {showNewCollection ? (
                 <div className="flex items-center gap-1.5">
-                  <input
+                  <Input
                     type="text"
                     value={newCollectionName}
                     onChange={(e) => setNewCollectionName(e.target.value)}
@@ -422,34 +429,34 @@ export function Sidebar() {
                       if (e.key === "Escape") setShowNewCollection(false);
                     }}
                     placeholder="Collection name"
-                    className="input-apple flex-1 text-[12px] py-[5px]"
+                    className="h-8 flex-1 text-[12px]"
                     autoFocus
                   />
                   <button
                     onClick={handleAddCollection}
-                    className="text-[11px] text-accent font-medium px-2 py-1 hover:bg-accent/10 rounded-md transition-colors"
+                    className="text-[11px] text-primary font-medium px-2 py-1 hover:bg-primary/10 rounded-md transition-colors"
                   >
                     Add
                   </button>
                   <button
                     onClick={() => setShowNewCollection(false)}
-                    className="p-1 hover:bg-black/5 rounded-md transition-colors"
+                    className="p-1 hover:bg-accent rounded-md transition-colors"
                   >
-                    <X size={12} className="text-text-tertiary" />
+                    <X size={12} className="text-muted-foreground" />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => setShowNewCollection(true)}
-                    className="flex items-center gap-1.5 text-[12px] text-accent hover:text-accent-hover transition-colors py-1"
+                    className="flex items-center gap-1.5 text-[12px] text-primary hover:text-primary/90 transition-colors py-1"
                   >
                     <FolderPlus size={13} strokeWidth={2} />
                     New Collection
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-accent transition-colors"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
                     title="Import Postman / OpenAPI / Insomnia / HAR / .http file"
                   >
                     <Upload size={11} />
@@ -469,8 +476,8 @@ export function Sidebar() {
             <div className="space-y-1">
               {collections.length === 0 && !showNewCollection && (
                 <div className="text-center py-12">
-                  <FolderOpen size={28} className="mx-auto text-text-tertiary mb-2" strokeWidth={1.5} />
-                  <p className="text-text-tertiary text-[12px]">No collections yet</p>
+                  <FolderOpen size={28} className="mx-auto text-muted-foreground mb-2" strokeWidth={1.5} />
+                  <p className="text-muted-foreground text-[12px]">No collections yet</p>
                 </div>
               )}
               {collections.map((collection) => (
@@ -486,7 +493,7 @@ export function Sidebar() {
                   }}
                   onDragEnd={() => setDraggingId(null)}
                 >
-                  <div className="group flex items-center gap-2 px-2.5 py-2 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">
+                  <div className="group flex items-center gap-2 px-2.5 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <FolderOpen size={13} strokeWidth={1.8} />
                     {renamingCollection === collection.id ? (
                       <input
@@ -501,7 +508,7 @@ export function Sidebar() {
                             setRenameValue("");
                           }
                         }}
-                        className="flex-1 bg-surface text-text-primary px-1.5 py-0.5 rounded text-[11px] normal-case font-normal tracking-normal"
+                        className="flex-1 bg-card text-foreground px-1.5 py-0.5 rounded text-[11px] normal-case font-normal tracking-normal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         autoFocus
                       />
                     ) : (
@@ -513,7 +520,7 @@ export function Sidebar() {
                         {collection.name}
                       </span>
                     )}
-                    <span className="text-text-tertiary bg-surface-secondary px-1.5 py-0.5 rounded-md text-[10px]">
+                    <span className="text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md text-[10px]">
                       {collection.requests.length}
                     </span>
                     <button
@@ -521,17 +528,27 @@ export function Sidebar() {
                         e.stopPropagation();
                         startRenameCollection(collection.id, collection.name);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
                       title="Rename collection"
                     >
-                      <Pencil size={11} className="text-text-tertiary" />
+                      <Pencil size={11} className="text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSettingsCollectionId(collection.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
+                      title={t("collection_settings.open_tooltip")}
+                    >
+                      <SettingsIcon size={11} className="text-muted-foreground" />
                     </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingAuthCollectionId(collection.id);
                       }}
-                      className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all ${collection.auth && collection.auth.auth_type !== "none" ? "!opacity-100" : ""}`}
+                      className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all ${collection.auth && collection.auth.auth_type !== "none" ? "!opacity-100" : ""}`}
                       title={
                         collection.auth && collection.auth.auth_type !== "none"
                           ? `Edit collection auth (currently ${collection.auth.auth_type})`
@@ -540,7 +557,7 @@ export function Sidebar() {
                     >
                       <KeyRound
                         size={11}
-                        className={collection.auth && collection.auth.auth_type !== "none" ? "text-accent" : "text-text-tertiary"}
+                        className={collection.auth && collection.auth.auth_type !== "none" ? "text-primary" : "text-muted-foreground"}
                       />
                     </button>
                     <button
@@ -548,7 +565,7 @@ export function Sidebar() {
                         e.stopPropagation();
                         setVariableScope({ kind: "collection", collectionId: collection.id });
                       }}
-                      className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all ${collection.variables && collection.variables.length > 0 ? "!opacity-100" : ""}`}
+                      className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all ${collection.variables && collection.variables.length > 0 ? "!opacity-100" : ""}`}
                       title={
                         collection.variables && collection.variables.length > 0
                           ? `Edit collection variables (${collection.variables.length} defined)`
@@ -557,7 +574,7 @@ export function Sidebar() {
                     >
                       <Braces
                         size={11}
-                        className={collection.variables && collection.variables.length > 0 ? "text-accent" : "text-text-tertiary"}
+                        className={collection.variables && collection.variables.length > 0 ? "text-primary" : "text-muted-foreground"}
                       />
                     </button>
                     <button
@@ -565,68 +582,62 @@ export function Sidebar() {
                         e.stopPropagation();
                         setRunnerCollectionId(collection.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
                       title="Run collection"
                     >
-                      <Play size={11} className="text-text-tertiary" />
+                      <Play size={11} className="text-muted-foreground" />
                     </button>
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExportMenuColId(exportMenuColId === collection.id ? null : collection.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all"
-                        title={t("sidebar.export_collection")}
-                      >
-                        <Download size={11} className="text-text-tertiary" />
-                      </button>
-                      {exportMenuColId === collection.id && (
-                        <div
-                          className="absolute right-0 top-full mt-1 bg-bg-primary border border-border rounded-apple shadow-lg py-1 z-50 min-w-[180px]"
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
                           onClick={(e) => e.stopPropagation()}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
+                          title={t("sidebar.export_collection")}
                         >
-                          <button
-                            onClick={() => { exportPostman(collection.id); setExportMenuColId(null); }}
-                            className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 dark:hover:bg-white/10"
-                          >
-                            {t("sidebar.export_postman")}
-                          </button>
-                          <button
-                            onClick={() => { exportAsOpenApi(collection.id); setExportMenuColId(null); }}
-                            className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 dark:hover:bg-white/10"
-                          >
-                            {t("sidebar.export_openapi")}
-                          </button>
-                          <div className="border-t border-border my-1" />
-                          <button
-                            onClick={() => { generateMocksFromOpenApi(collection.id); setExportMenuColId(null); }}
-                            className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 dark:hover:bg-white/10"
-                          >
-                            {t("sidebar.generate_mocks")}
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                          <Download size={11} className="text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="min-w-[180px] text-[12px]"
+                      >
+                        <DropdownMenuItem
+                          onSelect={() => exportPostman(collection.id)}
+                        >
+                          {t("sidebar.export_postman")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => exportAsOpenApi(collection.id)}
+                        >
+                          {t("sidebar.export_openapi")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => generateMocksFromOpenApi(collection.id)}
+                        >
+                          {t("sidebar.generate_mocks")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeletingCollection({ id: collection.id, name: collection.name });
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-error/10 rounded-md transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 rounded-md transition-all"
                       title={t("common.delete")}
                     >
-                      <Trash2 size={11} className="text-error/70" />
+                      <Trash2 size={11} className="text-destructive/70" />
                     </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         addRequestToCollection(collection.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent/10 rounded-md transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
                       title="Save current request to collection"
                     >
-                      <Plus size={11} className="text-accent" />
+                      <Plus size={11} className="text-primary" />
                     </button>
                   </div>
                   <CollectionTreeView
@@ -649,6 +660,10 @@ export function Sidebar() {
       <CollectionAuthModal
         collectionId={editingAuthCollectionId}
         onClose={() => setEditingAuthCollectionId(null)}
+      />
+      <CollectionSettingsModal
+        collectionId={settingsCollectionId}
+        onClose={() => setSettingsCollectionId(null)}
       />
       {runnerCollectionId && (
         <CollectionRunnerModal
@@ -720,29 +735,29 @@ function EnvDropdown({
   }, [environments, search]);
 
   return (
-    <div className="absolute top-full left-0 mt-1 w-[280px] max-w-[360px] max-h-[70vh] overflow-y-auto bg-surface rounded-apple shadow-apple-lg border border-border-light z-30">
+    <div className="absolute top-full left-0 mt-1 w-[280px] max-w-[360px] max-h-[70vh] overflow-y-auto bg-card rounded-lg shadow-lg border border-border z-30">
       {showSearch && (
-        <div className="sticky top-0 bg-surface border-b border-border-light p-1.5 z-10">
+        <div className="sticky top-0 bg-card border-b border-border p-1.5 z-10">
           <div className="relative">
             <Search
               size={11}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
             />
-            <input
+            <Input
               type="text"
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={t("env.search_placeholder")}
-              className="input-apple w-full text-[11px] py-1 pl-6 pr-6"
+              className="h-7 w-full pl-6 pr-6 text-[11px]"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => onSearchChange("")}
-                className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-secondary"
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted"
                 title={t("common.clear")}
               >
-                <X size={10} className="text-text-tertiary" />
+                <X size={10} className="text-muted-foreground" />
               </button>
             )}
           </div>
@@ -750,14 +765,14 @@ function EnvDropdown({
       )}
       <button
         onClick={() => onSelect(null)}
-        className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-surface-secondary transition-colors ${
-          !activeEnvId ? "text-accent" : "text-text-secondary"
+        className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-muted transition-colors ${
+          !activeEnvId ? "text-primary" : "text-muted-foreground"
         }`}
       >
         {t("sidebar.no_active_environment")}
       </button>
       {environments.length > 0 && filtered.length === 0 && (
-        <p className="text-[11px] text-text-tertiary italic px-3 py-2">
+        <p className="text-[11px] text-muted-foreground italic px-3 py-2">
           {t("env.no_search_results")}
         </p>
       )}
@@ -766,12 +781,12 @@ function EnvDropdown({
           key={env.id}
           onClick={() => onSelect(env.id)}
           title={env.name}
-          className={`flex items-center w-full px-3 py-1.5 text-[12px] hover:bg-surface-secondary transition-colors ${
-            env.id === activeEnvId ? "text-accent" : "text-text-primary"
+          className={`flex items-center w-full px-3 py-1.5 text-[12px] hover:bg-muted transition-colors ${
+            env.id === activeEnvId ? "text-primary" : "text-foreground"
           }`}
         >
           <span className="flex-1 min-w-0 truncate text-left">{env.name}</span>
-          <span className="ml-2 shrink-0 text-[10px] text-text-tertiary tabular-nums">
+          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground tabular-nums">
             {env.variables.length}
           </span>
         </button>

@@ -1,8 +1,19 @@
 import { useMemo, useState } from "react";
-import { X, Copy, Check, Code2 } from "lucide-react";
+import { Copy, Check, Code2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { CODEGEN_TARGETS, generateCode, type CodegenTarget } from "../utils/codegen";
+import {
+  CODEGEN_TARGETS,
+  generateCode,
+  type CodegenTarget,
+} from "../utils/codegen";
 import type { RequestItem } from "../types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export function CodegenModal({
   request,
@@ -24,54 +35,58 @@ export function CodegenModal({
   }, [request, target, t]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-apple-lg shadow-apple-lg w-[720px] max-h-[80vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-light">
-          <div className="flex items-center gap-2">
-            <Code2 size={18} className="text-accent" />
-            <h2 className="text-[15px] font-semibold text-text-primary">{t("codegen.title")}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-secondary transition-colors"
-          >
-            <X size={16} className="text-text-tertiary" />
-          </button>
-        </div>
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="flex max-h-[80vh] max-w-[720px] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle className="flex items-center gap-2 text-[15px]">
+            <Code2 size={18} className="text-primary" />
+            {t("codegen.title")}
+          </DialogTitle>
+        </DialogHeader>
 
-        <div className="px-5 py-3 border-b border-border-light flex items-center gap-2 flex-wrap">
-          {CODEGEN_TARGETS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setTarget(t.value)}
-              className={`text-[11px] px-2.5 py-1 rounded-md transition-colors ${
-                target === t.value
-                  ? "bg-accent text-white"
-                  : "bg-surface-secondary text-text-secondary hover:bg-surface-secondary/70"
-              }`}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
+          {CODEGEN_TARGETS.map((tgt) => (
+            <Button
+              key={tgt.value}
+              size="sm"
+              variant={target === tgt.value ? "default" : "secondary"}
+              className="h-7 px-2.5 text-[11px]"
+              onClick={() => setTarget(tgt.value)}
             >
-              {t.label}
-            </button>
+              {tgt.label}
+            </Button>
           ))}
         </div>
 
-        <div className="flex-1 overflow-auto bg-surface-secondary p-4 relative">
-          <button
+        <div className="relative flex-1 overflow-auto bg-muted p-4">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => {
               navigator.clipboard.writeText(code);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
-            className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-surface rounded-md text-[11px] hover:bg-surface/80 transition-colors shadow-apple-sm"
+            className="absolute right-3 top-3 h-7 gap-1 px-2 text-[11px] shadow-sm"
           >
-            {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
+            {copied ? (
+              <Check size={12} className="text-success" />
+            ) : (
+              <Copy size={12} />
+            )}
             {copied ? t("codegen.copied") : t("codegen.copy")}
-          </button>
-          <pre className="text-[12px] font-mono text-text-primary whitespace-pre-wrap break-all leading-[1.65]">
+          </Button>
+          <pre className="whitespace-pre-wrap break-all font-mono text-[12px] leading-[1.65] text-foreground">
             {code}
           </pre>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

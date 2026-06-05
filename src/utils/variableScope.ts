@@ -23,7 +23,7 @@ function applyVars(into: Record<string, string>, vars: EnvVariable[] | undefined
 }
 
 /** Depth-first search to find the chain of folders leading to a request. */
-function findFolderChain(
+export function findFolderChain(
   folders: CollectionFolder[],
   requestId: string,
   trail: CollectionFolder[],
@@ -86,4 +86,63 @@ export function buildScopedVars(ctx: BuildContext): Record<string, string> {
   }
 
   return out;
+}
+
+/** Which scope layer a resolved variable's winning value came from. */
+export type VarSource = "global" | "collection" | "folder" | "environment";
+
+export interface ResolvedVar {
+  key: string;
+  /** The value from the highest-priority layer that defined this key. */
+  value: string;
+  source: VarSource;
+  /** Human-readable origin: collection / folder / environment name. Omitted
+   *  for the global (workspace) scope. */
+  origin?: string;
+}
+
+/**
+ * Like {@link buildScopedVars}, but records *where* each winning value came
+ * from so the UI can show the user why `{{token}}` resolves the way it does.
+ * Applies the same precedence (global < collection < folder(outer→inner) <
+ * environment); the last writer for a key wins, mirroring the flat map.
+ *
+ * Does not include transient (script-time) overrides — those only exist after
+ * pre-scripts run inside the pipeline.
+ */
+export function buildScopedVarsWithSource(ctx: BuildContext): ResolvedVar[] {
+  const map = new Map<string, ResolvedVar>();
+  const apply = (
+    vars: EnvVariable[] | undefined,
+    source: VarSource,
+    origin?: string,
+  ) => {
+    if (!vars) return;
+    for (const v of vars) {
+      if (v.enabled && v.key) {
+        map.set(v.key, { key: v.key, value: v.value, source, origin });
+      }
+    }
+  };
+
+  apply(ctx.workspace?.variables, "global");
+
+  const collection = ctx.request.collectionId
+    ? ctx.collections.find((c) => c.id === ctx.request.collectionId)
+    : undefined;
+  if (collection) {
+    apply(collection.variables, "collection", collection.name);
+    const chain = findFolderChain(collection.folders, ctx.request.id, []);
+    if (chain) {
+      for (const folder of chain) apply(folder.variables, "folder", folder.name);
+    }
+  }
+
+  const activeEnvId = ctx.workspace?.active_environment_id;
+  const activeEnv = activeEnvId
+    ? ctx.environments.find((e) => e.id === activeEnvId)
+    : undefined;
+  if (activeEnv) apply(activeEnv.variables, "environment", activeEnv.name);
+
+  return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
 }

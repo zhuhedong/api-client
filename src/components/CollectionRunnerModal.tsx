@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
-import { createPortal } from "react-dom";
-import { Play, X, Square, CheckCircle2, XCircle, Download } from "lucide-react";
+import { Play, Square, CheckCircle2, XCircle, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
@@ -21,6 +20,20 @@ import type {
 } from "../types";
 
 import type { RunResult } from "../utils/runnerExport";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function genId(): string {
   return Math.random().toString(36).substring(2, 15);
@@ -57,6 +70,7 @@ function colReqToRequestItem(
     bodyType: req.body_type as RequestItem["bodyType"],
     formData: [emptyKV()],
     auth: req.auth,
+    description: req.description,
     preScript: req.pre_script,
     testScript: req.test_script,
     collectionId,
@@ -81,7 +95,6 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
   const [dataJson, setDataJson] = useState("");
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<RunResult[]>([]);
-  const [exportOpen, setExportOpen] = useState(false);
   const cancelRef = useRef(false);
 
   if (!col) return null;
@@ -200,7 +213,6 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
   const erroredRequests = results.filter((r) => r.error).length;
 
   const doExport = async (format: "junit" | "json" | "html") => {
-    setExportOpen(false);
     const ext = format === "junit" ? "xml" : format;
     const filters =
       format === "junit"
@@ -227,52 +239,50 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
 
   // Portal to <body> so we escape the sidebar's `backdrop-blur-xl`
   // containing block (without it, the modal is clipped to the sidebar).
-  return createPortal(
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-bg-primary border border-border rounded-apple shadow-xl w-[820px] max-w-[92vw] h-[80vh] max-h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h2 className="text-[13px] font-semibold text-text-primary">
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="flex h-[80vh] max-h-[85vh] w-[92vw] max-w-[820px] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-4 py-3 text-left">
+          <DialogTitle className="text-[13px]">
             {t("runner.title", { name: col.name })}
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-black/5"
-          >
-            <X size={14} className="text-text-tertiary" />
-          </button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
         {/* Config */}
         <div className="px-4 py-3 border-b border-border space-y-2">
           <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-[11px] text-text-secondary">
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
               {t("runner.iterations")}
-              <input
+              <Input
                 type="number"
                 min={1}
                 max={1000}
                 value={iterations}
                 onChange={(e) => setIterations(Math.max(1, Number(e.target.value)))}
                 disabled={running}
-                className="w-16 input-apple text-[12px] px-2 py-1"
+                className="h-7 w-16 px-2 text-[12px]"
               />
             </label>
-            <label className="flex items-center gap-2 text-[11px] text-text-secondary">
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
               {t("runner.delay_ms")}
-              <input
+              <Input
                 type="number"
                 min={0}
                 step={100}
                 value={delayMs}
                 onChange={(e) => setDelayMs(Math.max(0, Number(e.target.value)))}
                 disabled={running}
-                className="w-20 input-apple text-[12px] px-2 py-1"
+                className="h-7 w-20 px-2 text-[12px]"
               />
             </label>
           </div>
           <div>
-            <label className="text-[11px] text-text-secondary block mb-1">
+            <label className="text-[11px] text-muted-foreground block mb-1">
               {t("runner.data")}
             </label>
             <CodeEditor
@@ -286,28 +296,31 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
           </div>
           <div className="flex items-center gap-2">
             {!running ? (
-              <button
+              <Button
+                size="sm"
                 onClick={run}
                 disabled={requests.length === 0}
-                className="btn-apple btn-apple-sm bg-accent text-white hover:bg-accent/90 flex items-center gap-1.5"
+                className="gap-1.5"
               >
                 <Play size={12} />
                 {t("runner.run_with_count", { count: requests.length })}
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => {
                   cancelRef.current = true;
                 }}
-                className="btn-apple btn-apple-sm bg-error/10 text-error hover:bg-error/15 flex items-center gap-1.5"
+                className="gap-1.5 bg-destructive/10 text-destructive hover:bg-destructive/15"
               >
                 <Square size={12} />
                 {t("runner.stop")}
-              </button>
+              </Button>
             )}
             {results.length > 0 && !running && (
               <>
-                <span className="text-[11px] text-text-tertiary">
+                <span className="text-[11px] text-muted-foreground">
                   {totalTests > 0 && (
                     <span>
                       {t("runner.summary_passed_failed", { passed: passedTests, failed: failedTests })}
@@ -316,36 +329,33 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
                   )}
                   {totalTests === 0 && t("runner.summary_completed", { count: results.length })}
                 </span>
-                <div className="relative ml-auto">
-                  <button
-                    onClick={() => setExportOpen(!exportOpen)}
-                    className="btn-apple btn-apple-sm flex items-center gap-1.5 text-[11px]"
-                  >
-                    <Download size={12} />
-                    {t("runner.export")}
-                  </button>
-                  {exportOpen && (
-                    <div className="absolute right-0 top-full mt-1 bg-bg-primary border border-border rounded-apple shadow-lg py-1 z-50 min-w-[140px]">
-                      <button
-                        onClick={() => doExport("junit")}
-                        className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 text-text-primary"
+                <div className="ml-auto">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-[11px]"
                       >
+                        <Download size={12} />
+                        {t("runner.export")}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="min-w-[140px] text-[12px]"
+                    >
+                      <DropdownMenuItem onSelect={() => doExport("junit")}>
                         {t("runner.export_junit")}
-                      </button>
-                      <button
-                        onClick={() => doExport("json")}
-                        className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 text-text-primary"
-                      >
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => doExport("json")}>
                         {t("runner.export_json")}
-                      </button>
-                      <button
-                        onClick={() => doExport("html")}
-                        className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-black/5 text-text-primary"
-                      >
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => doExport("html")}>
                         {t("runner.export_html")}
-                      </button>
-                    </div>
-                  )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </>
             )}
@@ -355,41 +365,41 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
         {/* Results */}
         <div className="flex-1 overflow-auto px-4 py-2">
           {results.length === 0 && !running && (
-            <p className="text-[12px] text-text-tertiary py-4 text-center">
+            <p className="text-[12px] text-muted-foreground py-4 text-center">
               {t("runner.hint")}
             </p>
           )}
           {results.map((r, i) => (
             <div
               key={i}
-              className="flex items-center gap-2 py-1.5 border-b border-border-light/40 last:border-b-0"
+              className="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-b-0"
             >
               {r.error ? (
-                <XCircle size={13} className="text-error shrink-0" />
+                <XCircle size={13} className="text-destructive shrink-0" />
               ) : r.tests.length > 0 && r.tests.every((t) => t.passed) ? (
                 <CheckCircle2 size={13} className="text-success shrink-0" />
               ) : r.tests.some((t) => !t.passed) ? (
-                <XCircle size={13} className="text-error shrink-0" />
+                <XCircle size={13} className="text-destructive shrink-0" />
               ) : (
-                <CheckCircle2 size={13} className="text-text-tertiary shrink-0" />
+                <CheckCircle2 size={13} className="text-muted-foreground shrink-0" />
               )}
-              <span className="text-[11px] font-mono text-text-tertiary w-12 shrink-0">
+              <span className="text-[11px] font-mono text-muted-foreground w-12 shrink-0">
                 {r.method}
               </span>
-              <span className="text-[12px] text-text-primary truncate flex-1">
+              <span className="text-[12px] text-foreground truncate flex-1">
                 {r.name}
               </span>
               {r.status && (
-                <span className="text-[11px] text-text-secondary">{r.status}</span>
+                <span className="text-[11px] text-muted-foreground">{r.status}</span>
               )}
               {r.timeMs !== undefined && (
-                <span className="text-[11px] text-text-tertiary">{r.timeMs}ms</span>
+                <span className="text-[11px] text-muted-foreground">{r.timeMs}ms</span>
               )}
               {iterations > 1 && (
-                <span className="text-[10px] text-text-tertiary">#{r.iteration}</span>
+                <span className="text-[10px] text-muted-foreground">#{r.iteration}</span>
               )}
               {r.error && (
-                <span className="text-[11px] text-error truncate max-w-[150px]">
+                <span className="text-[11px] text-destructive truncate max-w-[150px]">
                   {r.error}
                 </span>
               )}
@@ -397,13 +407,12 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
           ))}
           {running && (
             <div className="flex items-center gap-2 py-2">
-              <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              <span className="text-[11px] text-text-tertiary">Running…</span>
+              <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <span className="text-[11px] text-muted-foreground">Running…</span>
             </div>
           )}
-        </div>
       </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

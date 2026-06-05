@@ -51,6 +51,18 @@ export default tseslint.config(
     },
   },
   {
+    // shadcn/ui primitives intentionally co-export a component and its
+    // `cva` variant helper (e.g. `Button` + `buttonVariants`). The
+    // Fast-Refresh "only export components" rule is meant for app modules,
+    // not these library files, so we turn it off for the ui/ directory to
+    // keep `eslint --max-warnings 0` green.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    plugins: { "react-refresh": reactRefresh },
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
     // Vitest tests get the test globals.
     files: ["**/*.test.ts", "**/*.test.tsx"],
     languageOptions: {

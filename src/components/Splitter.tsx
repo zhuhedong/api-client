@@ -78,9 +78,9 @@ export function Splitter({
 
   const baseClass =
     orientation === "horizontal"
-      ? "w-1 cursor-col-resize hover:bg-accent/40"
-      : "h-1 cursor-row-resize hover:bg-accent/40";
-  const activeClass = dragging ? "bg-accent/60" : "bg-transparent";
+      ? "w-1 cursor-col-resize hover:bg-primary/40"
+      : "h-1 cursor-row-resize hover:bg-primary/40";
+  const activeClass = dragging ? "bg-primary/60" : "bg-transparent";
 
   return (
     <div

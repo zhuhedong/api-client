@@ -1,7 +1,16 @@
 import { useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface ConfirmDialogProps {
   /** When `null`/`false`, the dialog is closed. */
@@ -28,11 +37,13 @@ interface ConfirmDialogProps {
 }
 
 /**
- * Lightweight in-app confirmation dialog. Replaces the browser-native
- * `window.confirm` so confirmations can be styled, themed (dark mode),
- * localized, and shown above other modals without breaking focus.
+ * Lightweight in-app confirmation dialog, built on the shadcn/ui `Dialog`
+ * (Radix). Replaces the browser-native `window.confirm` so confirmations can
+ * be styled, themed (dark mode), localized, and shown above other modals
+ * without breaking focus.
  *
- * Esc closes the dialog (treated as cancel). Enter confirms.
+ * Radix owns the overlay, focus trap, and Esc-to-close (routed to `onCancel`
+ * via `onOpenChange`). Cmd/Ctrl+Enter confirms.
  */
 export function ConfirmDialog({
   open,
@@ -49,73 +60,57 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-      } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        // Cmd/Ctrl+Enter to confirm — plain Enter is reserved for the
-        // confirm button being focused, which already triggers via the
-        // browser's default activation behaviour.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        // Cmd/Ctrl+Enter to confirm. Plain Enter activates the focused
+        // confirm button via the browser's default behaviour. Esc is handled
+        // by Radix and routed to onCancel through onOpenChange.
         e.preventDefault();
         onConfirm();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onCancel, onConfirm]);
+  }, [open, onConfirm]);
 
-  if (!open) return null;
-
-  const confirmClass =
-    variant === "danger"
-      ? "bg-error text-white hover:bg-error/90"
-      : "bg-accent text-white hover:bg-accent-hover";
-
-  // Portal to <body> so we escape any ancestor `backdrop-filter` / `transform`
-  // containing block (e.g. the sidebar's `backdrop-blur-xl`). Without this,
-  // `position: fixed` is constrained to the ancestor instead of the viewport.
-  return createPortal(
-    <div
-      // z-60 keeps confirm above the panel that triggered it (panels use z-50).
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onCancel}
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
     >
-      <div
-        className="bg-surface rounded-apple-lg shadow-apple-lg w-[420px] max-w-[90vw] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start gap-3 p-5">
-          {variant === "danger" && (
-            <div className="shrink-0 w-9 h-9 rounded-full bg-error/10 flex items-center justify-center">
-              <AlertTriangle size={18} className="text-error" />
+      {/* z-[60] keeps confirm above panels that triggered it (panels render at
+          the default Radix z-50). */}
+      <DialogContent className="z-[60] sm:max-w-[420px]">
+        <DialogHeader>
+          <div className="flex items-start gap-3 text-left">
+            {variant === "danger" && (
+              <div className="shrink-0 w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-destructive" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription className="mt-1 whitespace-pre-line break-words">
+                {message}
+              </DialogDescription>
             </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h2 className="text-[14px] font-semibold text-text-primary">
-              {title}
-            </h2>
-            <p className="text-[12px] text-text-secondary mt-1 whitespace-pre-line break-words">
-              {message}
-            </p>
           </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-surface-secondary/50 border-t border-border-light">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 text-[12px] text-text-secondary hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors"
-          >
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
             {cancelLabel ?? t("common.cancel")}
-          </button>
-          <button
+          </Button>
+          <Button
             autoFocus
+            size="sm"
+            variant={variant === "danger" ? "destructive" : "default"}
             onClick={onConfirm}
-            className={`px-3 py-1.5 text-[12px] rounded-md transition-colors ${confirmClass}`}
           >
             {confirmLabel ?? t("common.delete")}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

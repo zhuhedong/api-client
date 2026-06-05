@@ -82,6 +82,7 @@ export const useRequestStore = create<RequestState>((set, get) => {
     defaultRedirectPolicy: "follow",
     defaultMaxRedirects: 10,
     defaultProxyUrl: "",
+    profileTiming: false,
     historyResponses: {},
     recentItems: [],
 
@@ -495,6 +496,7 @@ export const useRequestStore = create<RequestState>((set, get) => {
 
     // === Settings ===
     ...createSettingsSlice(set, get),
+    setProfileTiming: (on: boolean) => set({ profileTiming: on }),
 
     saveActiveRequest: async (target) => {
       const state = get();
@@ -524,6 +526,7 @@ export const useRequestStore = create<RequestState>((set, get) => {
         body: req.body,
         body_type: req.bodyType,
         auth,
+        description: req.description,
         pre_script: req.preScript,
         test_script: req.testScript,
         tags: req.tags,

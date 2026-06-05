@@ -26,6 +26,7 @@ const source: PipelineDefaultsSource = {
   defaultRedirectPolicy: "manual",
   defaultMaxRedirects: 7,
   defaultProxyUrl: "http://proxy.example.com:8080",
+  profileTiming: false,
 };
 
 describe("pipelineDefaultsFrom", () => {
@@ -38,6 +39,7 @@ describe("pipelineDefaultsFrom", () => {
       defaultRedirectPolicy: "manual",
       defaultMaxRedirects: 7,
       defaultProxyUrl: "http://proxy.example.com:8080",
+      profileTiming: false,
     };
     expect(out).toEqual(expected);
   });
@@ -53,6 +55,7 @@ describe("pipelineDefaultsFrom", () => {
         "defaultRedirectPolicy",
         "defaultTimeoutMs",
         "maxBodyBytes",
+        "profileTiming",
         "verifyTlsDefault",
       ].sort(),
     );

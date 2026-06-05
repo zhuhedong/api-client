@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import { useRequestStore } from "../store/useRequestStore";
 
@@ -28,26 +30,27 @@ export function WsPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-2 flex items-center gap-2 border-b border-border-light">
+      <div className="px-4 py-2 flex items-center gap-2 border-b border-border">
         <span
-          className={`w-2 h-2 rounded-full ${connected ? "bg-success" : "bg-text-tertiary"}`}
+          className={`w-2 h-2 rounded-full ${connected ? "bg-success" : "bg-muted-foreground"}`}
         />
-        <span className="text-[12px] text-text-secondary">
+        <span className="text-[12px] text-muted-foreground">
           {connected ? t("ws.connected") : t("ws.disconnected")}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {!connected ? (
-            <button
+            <Button
+              size="sm"
               onClick={() => wsConnect()}
               disabled={!activeRequest.url}
-              className="btn-send !py-1 !px-3 !text-[12px]"
+              className="!px-3 !py-1 !text-[12px]"
             >
               {t("ws.connect")}
-            </button>
+            </Button>
           ) : (
             <button
               onClick={() => wsClose()}
-              className="px-3 py-1 bg-error text-white font-medium rounded-apple text-[12px] hover:bg-error/90 active:scale-[0.97] transition-all"
+              className="px-3 py-1 bg-destructive text-white font-medium rounded-lg text-[12px] hover:bg-destructive/90 active:scale-[0.97] transition-all"
             >
               {t("ws.disconnect")}
             </button>
@@ -55,9 +58,9 @@ export function WsPanel() {
         </div>
       </div>
 
-      <div ref={logRef} className="flex-1 overflow-auto p-3 space-y-1 bg-surface-secondary/40">
+      <div ref={logRef} className="flex-1 overflow-auto p-3 space-y-1 bg-muted/40">
         {messages.length === 0 && (
-          <div className="text-center py-12 text-[12px] text-text-tertiary">
+          <div className="text-center py-12 text-[12px] text-muted-foreground">
             {t("ws.empty")}
           </div>
         )}
@@ -66,10 +69,10 @@ export function WsPanel() {
             key={m.id}
             className={`flex items-start gap-2 px-2 py-1.5 rounded text-[12px] font-mono ${
               m.direction === "sent"
-                ? "bg-accent/10 text-accent"
+                ? "bg-primary/10 text-primary"
                 : m.direction === "received"
-                ? "bg-surface text-text-primary"
-                : "bg-transparent text-text-tertiary italic"
+                ? "bg-card text-foreground"
+                : "bg-transparent text-muted-foreground italic"
             }`}
           >
             <span className="text-[10px] shrink-0 opacity-60">
@@ -83,8 +86,8 @@ export function WsPanel() {
         ))}
       </div>
 
-      <div className="p-3 border-t border-border-light flex items-end gap-2">
-        <textarea
+      <div className="p-3 border-t border-border flex items-end gap-2">
+        <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -97,10 +100,10 @@ export function WsPanel() {
             }
           }}
           placeholder={t("ws.placeholder")}
-          className="input-apple flex-1 font-mono text-[12px] resize-none h-14"
+          className="h-14 flex-1 resize-none font-mono text-[12px]"
           disabled={!connected}
         />
-        <button
+        <Button
           onClick={() => {
             if (text.trim()) {
               wsSend(text);
@@ -108,10 +111,9 @@ export function WsPanel() {
             }
           }}
           disabled={!connected || !text.trim()}
-          className="btn-send"
         >
           {t("ws.send")}
-        </button>
+        </Button>
       </div>
     </div>
   );

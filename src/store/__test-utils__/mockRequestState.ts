@@ -84,6 +84,7 @@ export function mockRequestState(
     defaultRedirectPolicy: "follow",
     defaultMaxRedirects: 10,
     defaultProxyUrl: "",
+    profileTiming: false,
     historyResponses: {},
     recentItems: [],
 
@@ -186,6 +187,7 @@ export function mockRequestState(
     setDefaultRedirectPolicy: s,
     setDefaultMaxRedirects: s,
     setDefaultProxyUrl: s,
+    setProfileTiming: s,
     saveActiveRequest: s,
     clearAllRecent: s,
     clearAllCookies: s,

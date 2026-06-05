@@ -40,10 +40,10 @@ export function SidebarRecentTab() {
         <div className="text-center py-12">
           <History
             size={28}
-            className="mx-auto text-text-tertiary mb-2"
+            className="mx-auto text-muted-foreground mb-2"
             strokeWidth={1.5}
           />
-          <p className="text-text-tertiary text-[12px]">
+          <p className="text-muted-foreground text-[12px]">
             {t("sidebar.recent_empty")}
           </p>
         </div>
@@ -73,18 +73,18 @@ export function SidebarRecentTab() {
         return (
           <div
             key={item.id}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-black/[0.04] active:bg-black/[0.06] cursor-pointer transition-colors"
+            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-accent active:bg-accent cursor-pointer transition-colors"
             onClick={onClick}
           >
             <FileText
               size={13}
-              className="shrink-0 text-text-tertiary"
+              className="shrink-0 text-muted-foreground"
               strokeWidth={1.75}
             />
-            <span className="text-[12px] text-text-secondary truncate flex-1">
+            <span className="text-[12px] text-muted-foreground truncate flex-1">
               {item.name || t("common.untitled")}
             </span>
-            <span className="text-[10px] text-text-tertiary shrink-0">
+            <span className="text-[10px] text-muted-foreground shrink-0">
               {formatRelativeTime(item.opened_at, t)}
             </span>
           </div>
@@ -92,7 +92,7 @@ export function SidebarRecentTab() {
       })}
       <button
         onClick={() => clearRecent()}
-        className="mt-3 w-full text-center text-[11px] text-text-tertiary hover:text-error transition-colors py-1.5"
+        className="mt-3 w-full text-center text-[11px] text-muted-foreground hover:text-destructive transition-colors py-1.5"
       >
         {t("sidebar.recent_clear")}
       </button>

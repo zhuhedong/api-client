@@ -1,14 +1,20 @@
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { X, Globe, Folder } from "lucide-react";
+import { Globe, Folder } from "lucide-react";
 import { useRequestStore } from "../store/useRequestStore";
 import { VariablesEditor } from "./VariablesEditor";
 import type { EnvVariable } from "../types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
-type Scope =
-  | { kind: "global" }
-  | { kind: "collection"; collectionId: string };
+type Scope = { kind: "global" } | { kind: "collection"; collectionId: string };
 
 interface Props {
   /** Which scope to edit. `null` closes the modal. */
@@ -26,7 +32,9 @@ export function VariableScopeModal({ scope, onClose }: Props) {
   const workspace = useRequestStore((s) => s.workspace);
   const collections = useRequestStore((s) => s.collections);
   const setGlobalVariables = useRequestStore((s) => s.setGlobalVariables);
-  const setCollectionVariables = useRequestStore((s) => s.setCollectionVariables);
+  const setCollectionVariables = useRequestStore(
+    (s) => s.setCollectionVariables,
+  );
 
   const collection =
     scope?.kind === "collection"
@@ -67,8 +75,8 @@ export function VariableScopeModal({ scope, onClose }: Props) {
     scope?.kind === "global"
       ? `global:${workspace?.id ?? ""}`
       : scope?.kind === "collection"
-      ? `collection:${collection?.id ?? ""}`
-      : "none";
+        ? `collection:${collection?.id ?? ""}`
+        : "none";
   const [prevScopeKey, setPrevScopeKey] = useState(scopeKey);
   if (scopeKey !== prevScopeKey) {
     setPrevScopeKey(scopeKey);
@@ -98,41 +106,29 @@ export function VariableScopeModal({ scope, onClose }: Props) {
     onClose();
   };
 
-  // Portal to <body> so we escape the sidebar's `backdrop-blur-xl`
-  // containing block (see EnvironmentPanel for the same fix).
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center"
-      onClick={onClose}
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
     >
-      <div
-        className="bg-surface rounded-apple-lg shadow-apple-lg w-[1024px] max-w-[92vw] h-[85vh] max-h-[85vh] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border-light shrink-0">
-          <div className="flex items-start gap-2 min-w-0">
+      <DialogContent className="flex h-[85vh] max-h-[85vh] w-[92vw] max-w-[1024px] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <div className="flex min-w-0 items-start gap-2">
             {scope.kind === "global" ? (
-              <Globe size={18} className="text-accent shrink-0 mt-0.5" />
+              <Globe size={18} className="mt-0.5 shrink-0 text-primary" />
             ) : (
-              <Folder size={18} className="text-accent shrink-0 mt-0.5" />
+              <Folder size={18} className="mt-0.5 shrink-0 text-primary" />
             )}
             <div className="min-w-0">
-              <h2 className="text-[15px] font-semibold text-text-primary truncate">
-                {title}
-              </h2>
-              <p className="text-[12px] text-text-tertiary mt-0.5">
+              <DialogTitle className="truncate text-[15px]">{title}</DialogTitle>
+              <DialogDescription className="mt-0.5 text-[12px]">
                 {description}
-              </p>
+              </DialogDescription>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-secondary transition-colors shrink-0"
-            title={t("common.close")}
-          >
-            <X size={16} className="text-text-tertiary" />
-          </button>
-        </div>
+        </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <VariablesEditor
@@ -147,22 +143,15 @@ export function VariableScopeModal({ scope, onClose }: Props) {
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 bg-surface-secondary/40 border-t border-border-light shrink-0">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-[12px] text-text-secondary hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors"
-          >
+        <DialogFooter className="border-t border-border bg-muted/40 px-5 py-3">
+          <Button variant="ghost" size="sm" onClick={onClose}>
             {t("common.cancel")}
-          </button>
-          <button
-            onClick={save}
-            className="px-3 py-1.5 text-[12px] bg-accent text-white rounded-md hover:bg-accent-hover transition-colors"
-          >
+          </Button>
+          <Button size="sm" onClick={save}>
             {t("common.save")}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

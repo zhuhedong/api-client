@@ -1,10 +1,27 @@
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { X, Variable } from "lucide-react";
+import { Variable } from "lucide-react";
 import { useRequestStore } from "../store/useRequestStore";
 import { evaluateJsonPath } from "../utils/jsonPath";
 import type { ResponseData } from "../types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Props {
   /** The response we're saving from. Captured at modal open time so the
@@ -97,8 +114,7 @@ export function SaveToVariableModal({
       if (v === undefined) {
         return { value: "", error: t("save_variable.error_path_no_match") };
       }
-      const text =
-        typeof v === "string" ? v : JSON.stringify(v);
+      const text = typeof v === "string" ? v : JSON.stringify(v);
       return { value: text, error: null };
     } catch (e) {
       return {
@@ -135,7 +151,12 @@ export function SaveToVariableModal({
       existing >= 0
         ? env.variables.map((v, i) =>
             i === existing
-              ? { ...v, value: extracted.value, enabled: true, is_secret: isSecret }
+              ? {
+                  ...v,
+                  value: extracted.value,
+                  enabled: true,
+                  is_secret: isSecret,
+                }
               : v,
           )
         : [
@@ -159,129 +180,128 @@ export function SaveToVariableModal({
 
   const previewValue = extracted.error ? "" : extracted.value;
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-apple-lg shadow-apple-lg w-[520px] max-w-[92vw] max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-light">
-          <div className="flex items-center gap-2">
-            <Variable size={18} className="text-accent" />
-            <h2 className="text-[15px] font-semibold text-text-primary">
-              {t("save_variable.title")}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-surface-secondary transition-colors"
-          >
-            <X size={16} className="text-text-tertiary" />
-          </button>
-        </div>
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="flex max-h-[85vh] max-w-[520px] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle className="flex items-center gap-2 text-[15px]">
+            <Variable size={18} className="text-primary" />
+            {t("save_variable.title")}
+          </DialogTitle>
+        </DialogHeader>
 
-        <div className="px-5 pt-4 pb-2">
-          <label className="text-[12px] font-medium text-text-secondary block mb-1.5">
-            {t("save_variable.environment")}
-          </label>
-          {environments.length === 0 ? (
-            <div className="text-[12px] text-text-tertiary border border-border-light rounded-md px-3 py-2.5">
-              {t("save_variable.no_environments")}
-            </div>
-          ) : (
-            <select
-              value={envId}
-              onChange={(e) => setEnvId(e.target.value)}
-              className="input-apple w-full text-[12px]"
+        <div className="flex-1 overflow-auto">
+          <div className="px-5 pb-2 pt-4">
+            <Label className="mb-1.5 block text-[12px] text-muted-foreground">
+              {t("save_variable.environment")}
+            </Label>
+            {environments.length === 0 ? (
+              <div className="rounded-md border border-border px-3 py-2.5 text-[12px] text-muted-foreground">
+                {t("save_variable.no_environments")}
+              </div>
+            ) : (
+              <Select value={envId} onValueChange={setEnvId}>
+                <SelectTrigger className="h-9 w-full text-[12px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {environments.map((env) => (
+                    <SelectItem key={env.id} value={env.id} className="text-[12px]">
+                      {env.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <div className="px-5 pb-2">
+            <Label
+              htmlFor="save-var-key"
+              className="mb-1.5 block text-[12px] text-muted-foreground"
             >
-              {environments.map((env) => (
-                <option key={env.id} value={env.id}>
-                  {env.name}
-                </option>
-              ))}
-            </select>
+              {t("save_variable.variable_name")}
+            </Label>
+            <Input
+              id="save-var-key"
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder={t("save_variable.variable_name_placeholder")}
+              className="h-9 font-mono text-[12px]"
+            />
+          </div>
+
+          <div className="px-5 pb-2">
+            <Label
+              htmlFor="save-var-path"
+              className="mb-1.5 block text-[12px] text-muted-foreground"
+            >
+              {t("save_variable.json_path")}
+            </Label>
+            <Input
+              id="save-var-path"
+              type="text"
+              value={jsonPath}
+              onChange={(e) => setJsonPath(e.target.value)}
+              placeholder="$.token  ·  $.items[0].id  ·  (empty = whole body)"
+              className="h-9 font-mono text-[12px]"
+            />
+          </div>
+
+          <div className="px-5 pb-2">
+            <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
+              {t("save_variable.preview")}
+            </div>
+            <div className="max-h-[120px] overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-[11px] text-muted-foreground">
+              {extracted.error ? (
+                <span className="text-destructive">{extracted.error}</span>
+              ) : previewValue.length === 0 ? (
+                <span className="italic text-muted-foreground">
+                  {t("save_variable.preview_empty")}
+                </span>
+              ) : (
+                previewValue.slice(0, 2000)
+              )}
+              {!extracted.error && previewValue.length > 2000 && (
+                <span className="text-muted-foreground"> …</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 px-5 pb-2">
+            <Checkbox
+              id="save-var-secret"
+              checked={isSecret}
+              onCheckedChange={(c) => setIsSecret(c === true)}
+            />
+            <Label
+              htmlFor="save-var-secret"
+              className="cursor-pointer text-[12px] text-muted-foreground"
+            >
+              {t("save_variable.mark_secret")}
+            </Label>
+          </div>
+
+          {error && (
+            <div className="px-5 pb-2 text-[11px] text-destructive">{error}</div>
           )}
         </div>
 
-        <div className="px-5 pb-2">
-          <label className="text-[12px] font-medium text-text-secondary block mb-1.5">
-            {t("save_variable.variable_name")}
-          </label>
-          <input
-            type="text"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder={t("save_variable.variable_name_placeholder")}
-            className="input-apple w-full text-[12px] font-mono"
-          />
-        </div>
-
-        <div className="px-5 pb-2">
-          <label className="text-[12px] font-medium text-text-secondary block mb-1.5">
-            {t("save_variable.json_path")}
-          </label>
-          <input
-            type="text"
-            value={jsonPath}
-            onChange={(e) => setJsonPath(e.target.value)}
-            placeholder="$.token  ·  $.items[0].id  ·  (empty = whole body)"
-            className="input-apple w-full text-[12px] font-mono"
-          />
-        </div>
-
-        <div className="px-5 pb-2">
-          <div className="text-[12px] font-medium text-text-secondary mb-1.5">
-            {t("save_variable.preview")}
-          </div>
-          <div className="bg-surface-secondary rounded-md px-3 py-2 text-[11px] font-mono text-text-secondary max-h-[120px] overflow-auto">
-            {extracted.error ? (
-              <span className="text-error">{extracted.error}</span>
-            ) : previewValue.length === 0 ? (
-              <span className="text-text-tertiary italic">
-                {t("save_variable.preview_empty")}
-              </span>
-            ) : (
-              previewValue.slice(0, 2000)
-            )}
-            {!extracted.error && previewValue.length > 2000 && (
-              <span className="text-text-tertiary"> …</span>
-            )}
-          </div>
-        </div>
-
-        <div className="px-5 pb-2 flex items-center gap-2">
-          <input
-            id="save-var-secret"
-            type="checkbox"
-            checked={isSecret}
-            onChange={(e) => setIsSecret(e.target.checked)}
-          />
-          <label
-            htmlFor="save-var-secret"
-            className="text-[12px] text-text-secondary cursor-pointer"
-          >
-            {t("save_variable.mark_secret")}
-          </label>
-        </div>
-
-        {error && (
-          <div className="px-5 pb-2 text-[11px] text-error">{error}</div>
-        )}
-
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border-light">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-[12px] rounded-apple hover:bg-surface-secondary transition-colors"
-          >
+        <DialogFooter className="border-t border-border px-5 py-4">
+          <Button variant="ghost" size="sm" onClick={onClose}>
             {t("common.cancel")}
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={!canSave}
-            className="px-3 py-1.5 bg-accent text-white text-[12px] rounded-apple hover:bg-accent-hover active:scale-[0.97] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          </Button>
+          <Button size="sm" onClick={onSubmit} disabled={!canSave}>
             {saving ? t("common.saving") : t("common.save")}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

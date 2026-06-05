@@ -63,6 +63,8 @@ interface WorkerInitMessage {
     collectionVariables: Record<string, string>;
     variables: Record<string, string>;
     iterationData: Record<string, string>;
+    cookies?: Record<string, string>;
+    info?: { requestName?: string; requestId?: string; iteration?: number };
   };
 }
 
@@ -223,6 +225,24 @@ function buildPm(
     sendRequest,
   };
 
+  // Request metadata (Postman's pm.info). `eventName` reflects the phase.
+  pm.info = {
+    eventName: msg.kind === "test" ? "test" : "prerequest",
+    requestName: msg.context.info?.requestName ?? "",
+    requestId: msg.context.info?.requestId ?? "",
+    iteration: msg.context.info?.iteration ?? 0,
+  };
+
+  // Read-only cookie jar snapshot (name→value). Writing cookies from scripts
+  // isn't persisted, so we expose reads only rather than silently dropping
+  // `set()` calls.
+  const cookieMap = msg.context.cookies ?? {};
+  pm.cookies = {
+    get: (name: string) => cookieMap[name],
+    has: (name: string) => name in cookieMap,
+    toObject: () => ({ ...cookieMap }),
+  };
+
   if (msg.kind === "test" && msg.context.response) {
     const r = msg.context.response;
     let cachedJson: unknown = undefined;
@@ -245,6 +265,16 @@ function buildPm(
       // `.to.have.status(...)` works on response, too.
       get status() {
         return r.status;
+      },
+      responseTime: r.timeMs,
+      responseSize: r.sizeBytes,
+      // Case-insensitive single-header lookup (Postman's pm.response.headers.get).
+      header: (name: string) => {
+        const lower = name.toLowerCase();
+        const hit = Object.keys(r.headers).find(
+          (k) => k.toLowerCase() === lower,
+        );
+        return hit === undefined ? undefined : r.headers[hit];
       },
     };
     pm.test = (name: string, fn: () => void | Promise<void>) => {

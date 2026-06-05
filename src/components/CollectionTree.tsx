@@ -12,16 +12,17 @@ import type { Collection, CollectionFolder, CollectionRequest } from "../types";
 import { useRequestStore } from "../store/useRequestStore";
 import { tagColor } from "../utils/tagColor";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 /** Method-pill colour table — kept in sync with Sidebar.tsx. */
 const METHOD_BADGE: Record<string, string> = {
   GET: "bg-success/15 text-success",
   POST: "bg-orange/15 text-orange",
-  PUT: "bg-accent/15 text-accent",
+  PUT: "bg-primary/15 text-primary",
   PATCH: "bg-purple/15 text-purple",
-  DELETE: "bg-error/15 text-error",
-  HEAD: "bg-text-tertiary/15 text-text-secondary",
-  OPTIONS: "bg-text-tertiary/15 text-text-secondary",
+  DELETE: "bg-destructive/15 text-destructive",
+  HEAD: "bg-muted-foreground/15 text-muted-foreground",
+  OPTIONS: "bg-muted-foreground/15 text-muted-foreground",
 };
 
 /** A drag payload identifies a node within *one* collection. We refuse
@@ -83,6 +84,11 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
   const [newFolder, setNewFolder] = useState<NewFolderTarget | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [deletingFolder, setDeletingFolder] = useState<{ id: string; name: string } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<
+    | { x: number; y: number; kind: "request"; request: CollectionRequest }
+    | { x: number; y: number; kind: "folder"; folder: CollectionFolder }
+    | null
+  >(null);
 
   const startRenameRequest = (request: CollectionRequest) => {
     setRenaming({ kind: "request", collectionId: collection.id, nodeId: request.id });
@@ -201,11 +207,16 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
           handleDropOnRequest(request);
         }}
         onDragEnd={() => setDragging(null)}
-        className={`group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.04] cursor-pointer transition-colors ${
-          isActive ? "bg-accent/10" : ""
+        className={`group flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-accent cursor-pointer transition-colors ${
+          isActive ? "bg-primary/10" : ""
         }`}
         style={{ paddingLeft: `${10 + depth * 14}px` }}
         onClick={() => loadRequestFromCollection(collection.id, request.id)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setCtxMenu({ x: e.clientX, y: e.clientY, kind: "request", request });
+        }}
       >
         <span
           className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${
@@ -225,12 +236,12 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") cancelRename();
             }}
-            className="flex-1 bg-surface text-text-primary px-1.5 py-0.5 rounded text-[12px]"
+            className="flex-1 bg-card text-foreground px-1.5 py-0.5 rounded text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             autoFocus
           />
         ) : (
           <span
-            className="text-[12px] text-text-secondary truncate flex-1"
+            className="text-[12px] text-muted-foreground truncate flex-1"
             onDoubleClick={(e) => {
               e.stopPropagation();
               startRenameRequest(request);
@@ -258,20 +269,20 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
             e.stopPropagation();
             startRenameRequest(request);
           }}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent/10 rounded-md transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-primary/10 rounded-md transition-all"
           title={t("common.rename")}
         >
-          <Pencil size={11} className="text-text-tertiary" />
+          <Pencil size={11} className="text-muted-foreground" />
         </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
             deleteRequestFromCollection(collection.id, request.id);
           }}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-error/10 rounded-md transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded-md transition-all"
           title={t("common.delete")}
         >
-          <Trash2 size={11} className="text-error/70" />
+          <Trash2 size={11} className="text-destructive/70" />
         </button>
       </div>
     );
@@ -310,19 +321,24 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
             handleDropOnFolder(folder);
           }}
           onDragEnd={() => setDragging(null)}
-          className="group flex items-center gap-1.5 px-2.5 py-[7px] rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.04] cursor-pointer transition-colors"
+          className="group flex items-center gap-1.5 px-2.5 py-[7px] rounded-lg hover:bg-accent cursor-pointer transition-colors"
           style={{ paddingLeft: `${10 + depth * 14}px` }}
           onClick={() =>
             setCollapsed((m) => ({ ...m, [folder.id]: !m[folder.id] }))
           }
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setCtxMenu({ x: e.clientX, y: e.clientY, kind: "folder", folder });
+          }}
         >
           <ChevronRight
             size={12}
-            className={`text-text-tertiary shrink-0 transition-transform ${
+            className={`text-muted-foreground shrink-0 transition-transform ${
               isCollapsed ? "" : "rotate-90"
             }`}
           />
-          <Folder size={13} className="text-text-tertiary shrink-0" strokeWidth={1.8} />
+          <Folder size={13} className="text-muted-foreground shrink-0" strokeWidth={1.8} />
           {isRenaming ? (
             <input
               type="text"
@@ -334,12 +350,12 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
                 if (e.key === "Enter") commitRename();
                 if (e.key === "Escape") cancelRename();
               }}
-              className="flex-1 bg-surface text-text-primary px-1.5 py-0.5 rounded text-[12px]"
+              className="flex-1 bg-card text-foreground px-1.5 py-0.5 rounded text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               autoFocus
             />
           ) : (
             <span
-              className="text-[12px] font-medium text-text-secondary truncate flex-1"
+              className="text-[12px] font-medium text-muted-foreground truncate flex-1"
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 startRenameFolder(folder);
@@ -349,7 +365,7 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
               {folder.name}
             </span>
           )}
-          <span className="text-text-tertiary text-[10px] shrink-0">{totalCount}</span>
+          <span className="text-muted-foreground text-[10px] shrink-0">{totalCount}</span>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -358,30 +374,30 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
               // visible after creation.
               setCollapsed((m) => ({ ...m, [folder.id]: false }));
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent/10 rounded-md transition-all"
+            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-primary/10 rounded-md transition-all"
             title={t("sidebar.new_folder")}
           >
-            <FolderPlus size={11} className="text-text-tertiary" />
+            <FolderPlus size={11} className="text-muted-foreground" />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               startRenameFolder(folder);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent/10 rounded-md transition-all"
+            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-primary/10 rounded-md transition-all"
             title={t("sidebar.rename_folder")}
           >
-            <Pencil size={11} className="text-text-tertiary" />
+            <Pencil size={11} className="text-muted-foreground" />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               setDeletingFolder({ id: folder.id, name: folder.name });
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-error/10 rounded-md transition-all"
+            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded-md transition-all"
             title={t("common.delete")}
           >
-            <Trash2 size={11} className="text-error/70" />
+            <Trash2 size={11} className="text-destructive/70" />
           </button>
         </div>
         {!isCollapsed && (
@@ -391,7 +407,7 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
             {isCreatingHere && renderNewFolderInput(depth + 1)}
             {totalCount === 0 && !isCreatingHere && (
               <div
-                className="text-[11px] text-text-tertiary italic px-2.5 py-1"
+                className="text-[11px] text-muted-foreground italic px-2.5 py-1"
                 style={{ paddingLeft: `${10 + (depth + 1) * 14}px` }}
               >
                 {t("sidebar.empty_folder")}
@@ -408,7 +424,7 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
       className="flex items-center gap-1.5 px-2.5 py-[6px]"
       style={{ paddingLeft: `${10 + depth * 14}px` }}
     >
-      <Folder size={13} className="text-text-tertiary shrink-0" strokeWidth={1.8} />
+      <Folder size={13} className="text-muted-foreground shrink-0" strokeWidth={1.8} />
       <input
         type="text"
         value={newFolderName}
@@ -419,7 +435,7 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
           if (e.key === "Escape") cancelNewFolder();
         }}
         placeholder={t("sidebar.new_folder_placeholder")}
-        className="flex-1 bg-surface text-text-primary px-1.5 py-0.5 rounded text-[12px]"
+        className="flex-1 bg-card text-foreground px-1.5 py-0.5 rounded text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         autoFocus
       />
     </div>
@@ -453,7 +469,7 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
       <div className="flex justify-start mt-0.5">
         <button
           onClick={() => startNewFolder(null)}
-          className="flex items-center gap-1 text-[10px] text-text-tertiary hover:text-accent transition-colors px-2.5 py-1"
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors px-2.5 py-1"
           title={t("sidebar.new_folder")}
         >
           <Plus size={10} />
@@ -477,6 +493,52 @@ export function CollectionTreeView({ collection, activeRequestId }: CollectionTr
         }}
         onCancel={() => setDeletingFolder(null)}
       />
+
+      {ctxMenu &&
+        (() => {
+          const menu = ctxMenu;
+          const items: ContextMenuItem[] =
+            menu.kind === "request"
+              ? [
+                  {
+                    label: t("context_menu.rename"),
+                    onSelect: () => startRenameRequest(menu.request),
+                  },
+                  {
+                    label: t("context_menu.delete"),
+                    destructive: true,
+                    onSelect: () =>
+                      deleteRequestFromCollection(collection.id, menu.request.id),
+                  },
+                ]
+              : [
+                  {
+                    label: t("context_menu.new_folder"),
+                    onSelect: () => startNewFolder(menu.folder.id),
+                  },
+                  {
+                    label: t("context_menu.rename"),
+                    onSelect: () => startRenameFolder(menu.folder),
+                  },
+                  {
+                    label: t("context_menu.delete"),
+                    destructive: true,
+                    onSelect: () =>
+                      setDeletingFolder({
+                        id: menu.folder.id,
+                        name: menu.folder.name,
+                      }),
+                  },
+                ];
+          return (
+            <ContextMenu
+              x={menu.x}
+              y={menu.y}
+              items={items}
+              onClose={() => setCtxMenu(null)}
+            />
+          );
+        })()}
     </div>
   );
 }

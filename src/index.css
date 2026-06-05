@@ -2,41 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --color-bg: 245 245 247;
-  --color-sidebar: 255 255 255;
-  --color-sidebar-alpha: 0.72;
-  --color-surface: 255 255 255;
-  --color-surface-secondary: 242 242 247;
-  --color-border: 209 209 214;
-  --color-border-light: 229 229 234;
-  --color-text-primary: 29 29 31;
-  --color-text-secondary: 110 110 115;
-  --color-text-tertiary: 174 174 178;
-  --shadow-color: rgba(0,0,0,0.08);
-}
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
 
-.dark {
-  --color-bg: 28 28 30;
-  --color-sidebar: 28 28 30;
-  --color-sidebar-alpha: 0.92;
-  --color-surface: 44 44 46;
-  --color-surface-secondary: 58 58 60;
-  --color-border: 72 72 74;
-  --color-border-light: 56 56 58;
-  --color-text-primary: 245 245 247;
-  --color-text-secondary: 161 161 166;
-  --color-text-tertiary: 99 99 102;
-  --shadow-color: rgba(0,0,0,0.3);
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border-light;
+    @apply border-border;
   }
 
   body {
-    @apply bg-bg text-text-primary overflow-hidden antialiased;
+    @apply bg-background text-foreground overflow-hidden antialiased;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
       "Helvetica Neue", Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -53,48 +72,29 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-text-tertiary/40 rounded-full;
+    @apply bg-muted-foreground/40 rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-text-tertiary/60;
-  }
-
-  select {
-    -webkit-appearance: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aeaeb2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 28px !important;
+    @apply bg-muted-foreground/60;
   }
 }
 
+/*
+ * `.input-apple` — shared dense-form-field utility, implemented entirely with
+ * shadcn tokens (border-input / bg-background / ring-ring) so it renders
+ * identically to the `<Input>` primitive. Used by the credential and settings
+ * grids in RequestPanel and AuthEditor, where dozens of identical compact
+ * fields read more cleanly as a single utility than as repeated <Input>
+ * elements. New one-off fields should import `<Input>` from
+ * `@/components/ui/input` instead.
+ */
 @layer components {
-  .btn-send {
-    @apply px-5 py-2 bg-accent text-white font-medium rounded-apple text-[13px]
-      hover:bg-accent-hover active:scale-[0.97] transition-all
-      disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100
-      shadow-apple-sm;
-  }
-
   .input-apple {
-    @apply bg-surface-secondary border-0 rounded-lg px-3 py-[7px] text-text-primary
-      text-[13px] placeholder-text-tertiary
-      focus:outline-none focus:ring-2 focus:ring-accent/30 focus:bg-surface
-      transition-all;
-  }
-
-  .segmented-control {
-    @apply inline-flex bg-surface-secondary rounded-lg p-[3px] gap-[2px];
-  }
-
-  .segment {
-    @apply px-3 py-[5px] text-[12px] font-medium rounded-md transition-all
-      cursor-pointer select-none text-text-secondary;
-  }
-
-  .segment-active {
-    @apply bg-surface text-text-primary shadow-apple-sm;
+    @apply flex w-full rounded-md border border-input bg-background px-3 py-1.5
+      text-[13px] text-foreground placeholder:text-muted-foreground
+      ring-offset-background transition-colors
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+      disabled:cursor-not-allowed disabled:opacity-50;
   }
 }
