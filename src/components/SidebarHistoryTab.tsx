@@ -99,7 +99,7 @@ export function SidebarHistoryTab({
               strokeWidth={1.5}
             />
             <p className="text-muted-foreground text-[12px]">
-              {searchQuery ? "No results found" : "No requests yet"}
+               {searchQuery ? t("sidebar.history_no_results") : t("sidebar.history_empty")}
             </p>
           </div>
         )}
@@ -150,7 +150,7 @@ export function SidebarHistoryTab({
           onClick={() => clearAllHistory()}
           className="mt-3 w-full text-center text-[11px] text-muted-foreground hover:text-destructive transition-colors py-1.5"
         >
-          Clear All History
+          {t("sidebar.clear_all_history")}
         </button>
       )}
     </div>

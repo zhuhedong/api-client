@@ -42,7 +42,9 @@
     "disabled": "Disabled",
     "on": "on",
     "off": "off",
-    "double_click_to_rename": "Double-click to rename"
+    "double_click_to_rename": "Double-click to rename",
+    "browse": "Browse…",
+    "drag_to_resize": "Drag to resize"
   },
   "sidebar": {
     "collections": "Collections",
@@ -83,7 +85,18 @@
     "drop_to_root": "Drop here to move to collection root",
     "recent": "Recent",
     "recent_empty": "Nothing opened yet",
-    "recent_clear": "Clear Recent"
+    "recent_clear": "Clear Recent",
+    "collection_name": "Collection name",
+    "import_tooltip": "Import Postman / OpenAPI / Insomnia / HAR / .http file",
+    "rename_collection": "Rename collection",
+    "edit_collection_auth": "Edit collection auth (currently {{type}})",
+    "set_collection_auth": "Set collection auth (inherited by requests with 'Inherit')",
+    "edit_collection_variables": "Edit collection variables ({{n}} defined)",
+    "set_collection_variables": "Set collection-scoped variables",
+    "run_collection": "Run collection",
+    "history_no_results": "No results found",
+    "history_empty": "No requests yet",
+    "clear_all_history": "Clear All History"
   },
   "save_collection": {
     "title": "Save request to collection",
@@ -126,7 +139,52 @@
     "body_html": "HTML",
     "body_text": "Text",
     "body_form": "Form",
-    "body_graphql": "GraphQL"
+    "body_graphql": "GraphQL",
+    "body_url_encoded": "URL Encoded",
+    "body_binary": "Binary",
+    "body_placeholder": "Enter request body...",
+    "binary_path_placeholder": "Path to a file sent as the raw request body",
+    "beautify": "Beautify",
+    "param_key_placeholder": "Parameter",
+    "header_key_placeholder": "Header",
+    "field_key_placeholder": "Field name",
+    "gql_query": "Query",
+    "gql_variables": "Variables (JSON)",
+    "gql_schema_count": "{{n}} schema names",
+    "gql_schema_failed": "Schema fetch failed",
+    "gql_schema_refresh": "Refresh schema",
+    "curl_import_placeholder": "Paste cURL command here...",
+    "pre_request_hint": "Runs before the request is sent. Mutate variables with pm.environment.set(k, v) / pm.variables.set(k, v). Script is terminated after 5s.",
+    "tests_hint": "Runs after the response arrives. Use pm.test('name', fn) with pm.expect(...). Results show in the response panel.",
+    "settings_timeout": "Timeout (ms)",
+    "settings_timeout_hint": "Leave empty to use the global default.",
+    "settings_timeout_placeholder": "Default: {{n}} ms",
+    "settings_tags": "Tags",
+    "settings_remove_tag": "Remove tag \"{{name}}\"",
+    "settings_no_tags": "No tags",
+    "settings_tag_placeholder": "Add tag and press Enter (e.g. auth, v2, broken)",
+    "settings_tags_hint": "Tags help you filter and color-code requests in the sidebar. Persisted with the collection on save.",
+    "settings_tls": "TLS verification",
+    "settings_tls_default": "Use default ({{mode}})",
+    "settings_tls_default_verify": "verify",
+    "settings_tls_default_skip": "skip",
+    "settings_tls_on": "Verify certificates",
+    "settings_tls_off": "Skip verification (insecure)",
+    "settings_tls_skip_warn": "This request skips TLS verification.",
+    "settings_redirects": "Redirects",
+    "settings_redirect_follow": "Follow (default)",
+    "settings_redirect_none": "Do not follow",
+    "settings_max": "max",
+    "settings_proxy": "Proxy",
+    "settings_proxy_placeholder": "http://user:pass@host:8080  or  socks5://host:1080",
+    "settings_proxy_hint": "Routes this request through the given proxy. Supports HTTP, HTTPS, and SOCKS5.",
+    "settings_client_cert": "Client certificate (mTLS)",
+    "settings_cert_placeholder": "Path to .p12 / .pfx bundle",
+    "settings_cert_pass_placeholder": "Bundle passphrase (optional)",
+    "settings_cert_hint": "PKCS#12 bundle containing both the client cert and its private key.",
+    "protocol_http": "HTTP",
+    "protocol_websocket": "WebSocket",
+    "protocol_sse": "Server-Sent Events"
   },
   "response": {
     "status": "Status",
@@ -159,7 +217,27 @@
     "save_to_variable": "Save to variable…",
     "save_to_variable_done": "Saved to {{env}}.{{key}}",
     "request_failed": "Request Failed",
-    "retry": "Retry"
+    "retry": "Retry",
+    "sending": "Sending…",
+    "press_enter_prefix": "Press",
+    "press_enter_suffix": "to send",
+    "profile": "Profile",
+    "profile_tooltip": "Measure DNS / TCP / TLS on the next send (opens a separate probe connection)",
+    "filter_jsonpath_tooltip": "Filter response with JSONPath",
+    "show_raw": "Show raw JSON",
+    "show_tree": "Show JSON tree",
+    "prev_match": "Previous match",
+    "next_match": "Next match",
+    "clear_search": "Clear search",
+    "no_assertions": "Test script ran without recording any assertions.",
+    "console": "Console",
+    "unknown_type": "unknown type",
+    "connection_probe": "Connection probe (separate connection)",
+    "timing_dns": "DNS lookup",
+    "timing_tcp": "TCP connect",
+    "timing_tls": "TLS handshake",
+    "wait_label_profiled": "Wait (TTFB)",
+    "pdf_preview": "PDF preview"
   },
   "save_variable": {
     "title": "Save response value to variable",
@@ -174,7 +252,8 @@
     "error_path_no_match": "JSONPath didn't match anything in this body.",
     "error_path_on_non_json": "Response body isn't valid JSON — JSONPath can't be applied.",
     "error_binary_no_path": "Response body is binary. Set a JSONPath that extracts a string, or save to file instead.",
-    "error_env_missing": "Selected environment no longer exists."
+    "error_env_missing": "Selected environment no longer exists.",
+    "json_path_placeholder": "$.token  ·  $.items[0].id  ·  (empty = whole body)"
   },
   "settings": {
     "settings": "Settings",
@@ -262,7 +341,8 @@
     "no_search_results": "No environments match this filter.",
     "import_error_invalid_json": "Couldn't parse the file as JSON.",
     "import_error_unrecognised": "Unrecognised format. Expected a native export or a Postman environment.",
-    "import_error_empty": "No environments found in the imported file."
+    "import_error_empty": "No environments found in the imported file.",
+    "copy_suffix": " (copy)"
   },
   "kv": {
     "key_placeholder": "Key",
@@ -385,7 +465,8 @@
     "export": "Export",
     "export_junit": "JUnit XML",
     "export_json": "JSON",
-    "export_html": "HTML Report"
+    "export_html": "HTML Report",
+    "running": "Running…"
   },
   "mock": {
     "title": "Mock Server",
@@ -425,7 +506,8 @@
     "headers": "Headers",
     "status": "Status:",
     "time": "Time:",
-    "size": "Size:"
+    "size": "Size:",
+    "binary_notice": "[binary body, {{n}} base64 chars]"
   },
   "palette": {
     "placeholder": "Search requests, history, collections, environments…",
@@ -463,7 +545,9 @@
     "waiting": "Waiting for events from the server…",
     "not_connected": "Not connected. Hit Connect to start streaming.",
     "stream_open": "stream open",
-    "stream_closed": "stream closed"
+    "stream_closed": "stream closed",
+    "id_label": "id:",
+    "retry_label": "retry: {{n}}ms"
   },
   "collection_settings": {
     "open_tooltip": "Collection settings (description, auth, variables, scripts)",

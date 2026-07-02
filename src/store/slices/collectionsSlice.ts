@@ -48,6 +48,8 @@ import {
 import { postmanToCollection } from "../../utils/postman";
 import {
   createEmptyKeyValue,
+  ensureCollectionVarIds,
+  ensureVarIds,
   findRequestInCollection,
   generateId,
   updateActiveTab,
@@ -391,7 +393,7 @@ export function createCollectionsSlice(
     },
 
     updateCollection: async (col) => {
-      const updated = { ...col, updated_at: Date.now() };
+      const updated = { ...ensureCollectionVarIds(col), updated_at: Date.now() };
       await invoke("save_collection", { collection: updated });
       set((s) => ({
         collections: s.collections.map((c) =>
@@ -417,7 +419,7 @@ export function createCollectionsSlice(
     setGlobalVariables: async (variables) => {
       const { workspace } = get();
       if (!workspace) return;
-      const updated = { ...workspace, variables, updated_at: Date.now() };
+      const updated = { ...workspace, variables: ensureVarIds(variables), updated_at: Date.now() };
       set({ workspace: updated });
       try {
         await invoke("save_workspace", { workspace: updated });
@@ -431,7 +433,7 @@ export function createCollectionsSlice(
       const collections = await invoke<Collection[]>("list_collections", {
         workspaceId: workspace?.id,
       });
-      set({ collections });
+      set({ collections: collections.map(ensureCollectionVarIds) });
     },
   };
 }

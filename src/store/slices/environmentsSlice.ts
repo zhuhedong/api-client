@@ -18,7 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { StoreApi } from "zustand";
 
 import type { Environment } from "../../types";
-import { generateId } from "../storeHelpers";
+import { ensureVarIds, generateId } from "../storeHelpers";
 import type { RequestState } from "../storeTypes";
 
 /** Subset of `RequestState` exposed by this slice. */
@@ -59,7 +59,7 @@ export function createEnvironmentsSlice(
     },
 
     updateEnvironment: async (env) => {
-      const updated = { ...env, updated_at: Date.now() };
+      const updated = { ...env, variables: ensureVarIds(env.variables), updated_at: Date.now() };
       await invoke("save_environment", { env: updated });
       set((state) => ({
         environments: state.environments.map((e) =>
@@ -73,7 +73,12 @@ export function createEnvironmentsSlice(
       const environments = await invoke<Environment[]>("list_environments", {
         workspaceId: workspace?.id,
       });
-      set({ environments });
+      set({
+        environments: environments.map((e) => ({
+          ...e,
+          variables: ensureVarIds(e.variables),
+        })),
+      });
     },
 
     setActiveEnvironment: (id) => {

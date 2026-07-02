@@ -193,7 +193,7 @@ export function KeyValueEditor({
             </button>
             <button
               onClick={applyBulkMode}
-              className="px-2 py-1 text-[11px] bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+              className="px-2 py-1 text-[11px] bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
               {t("kv.bulk_apply")}
             </button>

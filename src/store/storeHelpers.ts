@@ -13,7 +13,9 @@ import type {
   RequestItem,
   ResponseData,
   Collection,
+  CollectionFolder,
   CollectionRequest,
+  EnvVariable,
   HistoryEntry,
 } from "../types";
 import {
@@ -153,4 +155,29 @@ export function findRequestInCollection(
     return null;
   };
   return walk(collection.folders);
+}
+
+/** Ensure every EnvVariable carries a stable `id`. Variables loaded from the
+ *  Rust backend and rows produced by `applyVarMutations` arrive without one;
+ *  without stable ids, deleting a middle row in VariablesEditor shifts the
+ *  per-row `useState` (show/hide, expand) of every row below it. Assigns a
+ *  fresh id where missing; preserves existing ids. */
+export function ensureVarIds(vars: EnvVariable[]): EnvVariable[] {
+  return vars.map((v) => (v.id ? v : { ...v, id: generateId() }));
+}
+
+/** Recursively normalize `variables` on a collection and all nested folders.
+ *  Returns a shallow-cloned collection so callers can `set()` it safely. */
+export function ensureCollectionVarIds(col: Collection): Collection {
+  const walkFolders = (folders: CollectionFolder[]): CollectionFolder[] =>
+    folders.map((f) => ({
+      ...f,
+      variables: f.variables ? ensureVarIds(f.variables) : f.variables,
+      folders: walkFolders(f.folders),
+    }));
+  return {
+    ...col,
+    variables: col.variables ? ensureVarIds(col.variables) : col.variables,
+    folders: walkFolders(col.folders),
+  };
 }

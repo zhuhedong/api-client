@@ -105,7 +105,7 @@ export function SsePanel() {
           ) : (
             <button
               onClick={() => sseClose()}
-              className="px-3 py-1 bg-destructive text-white font-medium rounded-lg text-[12px] hover:bg-destructive/90 active:scale-[0.97] transition-all"
+              className="px-3 py-1 bg-destructive text-destructive-foreground font-medium rounded-lg text-[12px] hover:bg-destructive/90 active:scale-[0.97] transition-all"
             >
               {t("sse.disconnect")}
             </button>
@@ -147,8 +147,8 @@ export function SsePanel() {
                     {e.event}
                   </span>
                 )}
-                {e.lastEventId && <span>id: {e.lastEventId}</span>}
-                {typeof e.retry === "number" && <span>retry: {e.retry}ms</span>}
+                {e.lastEventId && <span>{t("sse.id_label")} {e.lastEventId}</span>}
+                {typeof e.retry === "number" && <span>{t("sse.retry_label", { n: e.retry })}</span>}
               </div>
               {isErr && e.error && (
                 <div className="mt-1 whitespace-pre-wrap break-all">{e.error}</div>

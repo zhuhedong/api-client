@@ -249,7 +249,7 @@ export function SaveToVariableModal({
               type="text"
               value={jsonPath}
               onChange={(e) => setJsonPath(e.target.value)}
-              placeholder="$.token  ·  $.items[0].id  ·  (empty = whole body)"
+              placeholder={t("save_variable.json_path_placeholder")}
               className="h-9 font-mono text-[12px]"
             />
           </div>

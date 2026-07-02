@@ -42,7 +42,9 @@
     "disabled": "已禁用",
     "on": "开",
     "off": "关",
-    "double_click_to_rename": "双击重命名"
+    "double_click_to_rename": "双击重命名",
+    "browse": "浏览…",
+    "drag_to_resize": "拖动调整大小"
   },
   "sidebar": {
     "collections": "集合",
@@ -83,7 +85,18 @@
     "drop_to_root": "拖到此处移到集合根目录",
     "recent": "最近",
     "recent_empty": "暂无记录",
-    "recent_clear": "清空最近记录"
+    "recent_clear": "清空最近记录",
+    "collection_name": "集合名称",
+    "import_tooltip": "导入 Postman / OpenAPI / Insomnia / HAR / .http 文件",
+    "rename_collection": "重命名集合",
+    "edit_collection_auth": "编辑集合鉴权（当前 {{type}}）",
+    "set_collection_auth": "设置集合鉴权（设为\"继承\"的请求会使用此配置）",
+    "edit_collection_variables": "编辑集合变量（已定义 {{n}} 个）",
+    "set_collection_variables": "设置集合级变量",
+    "run_collection": "运行集合",
+    "history_no_results": "未找到结果",
+    "history_empty": "暂无请求",
+    "clear_all_history": "清空全部历史"
   },
   "save_collection": {
     "title": "保存请求到集合",
@@ -126,7 +139,52 @@
     "body_html": "HTML",
     "body_text": "文本",
     "body_form": "表单",
-    "body_graphql": "GraphQL"
+    "body_graphql": "GraphQL",
+    "body_url_encoded": "URL 编码",
+    "body_binary": "二进制",
+    "body_placeholder": "输入请求体...",
+    "binary_path_placeholder": "作为原始请求体发送的文件路径",
+    "beautify": "格式化",
+    "param_key_placeholder": "参数",
+    "header_key_placeholder": "头部",
+    "field_key_placeholder": "字段名",
+    "gql_query": "查询",
+    "gql_variables": "变量 (JSON)",
+    "gql_schema_count": "{{n}} 个 schema",
+    "gql_schema_failed": "Schema 获取失败",
+    "gql_schema_refresh": "刷新 schema",
+    "curl_import_placeholder": "在此粘贴 cURL 命令...",
+    "pre_request_hint": "在请求发送前运行。用 pm.environment.set(k, v) / pm.variables.set(k, v) 修改变量。脚本 5 秒后超时终止。",
+    "tests_hint": "在响应到达后运行。使用 pm.test('name', fn) 和 pm.expect(...)。结果显示在响应面板中。",
+    "settings_timeout": "超时 (毫秒)",
+    "settings_timeout_hint": "留空使用全局默认值。",
+    "settings_timeout_placeholder": "默认：{{n}} 毫秒",
+    "settings_tags": "标签",
+    "settings_remove_tag": "移除标签\"{{name}}\"",
+    "settings_no_tags": "暂无标签",
+    "settings_tag_placeholder": "添加标签后按回车（如 auth、v2、broken）",
+    "settings_tags_hint": "标签用于在侧栏筛选并为请求着色。保存到集合时一并持久化。",
+    "settings_tls": "TLS 验证",
+    "settings_tls_default": "使用默认（{{mode}}）",
+    "settings_tls_default_verify": "验证",
+    "settings_tls_default_skip": "跳过",
+    "settings_tls_on": "验证证书",
+    "settings_tls_off": "跳过验证（不安全）",
+    "settings_tls_skip_warn": "此请求跳过 TLS 验证。",
+    "settings_redirects": "重定向",
+    "settings_redirect_follow": "跟随（默认）",
+    "settings_redirect_none": "不跟随",
+    "settings_max": "最大",
+    "settings_proxy": "代理",
+    "settings_proxy_placeholder": "http://user:pass@host:8080  或  socks5://host:1080",
+    "settings_proxy_hint": "通过指定代理发送此请求。支持 HTTP、HTTPS 和 SOCKS5。",
+    "settings_client_cert": "客户端证书 (mTLS)",
+    "settings_cert_placeholder": ".p12 / .pfx 文件路径",
+    "settings_cert_pass_placeholder": "证书密码（可选）",
+    "settings_cert_hint": "包含客户端证书及其私钥的 PKCS#12 包。",
+    "protocol_http": "HTTP",
+    "protocol_websocket": "WebSocket",
+    "protocol_sse": "服务器推送事件 (SSE)"
   },
   "response": {
     "status": "状态",
@@ -159,7 +217,27 @@
     "save_to_variable": "保存到变量…",
     "save_to_variable_done": "已保存到 {{env}}.{{key}}",
     "request_failed": "请求失败",
-    "retry": "重试"
+    "retry": "重试",
+    "sending": "发送中…",
+    "press_enter_prefix": "按",
+    "press_enter_suffix": "发送",
+    "profile": "性能",
+    "profile_tooltip": "在下一次发送时测量 DNS / TCP / TLS（会发起一个独立的探测连接）",
+    "filter_jsonpath_tooltip": "用 JSONPath 过滤响应",
+    "show_raw": "显示原始 JSON",
+    "show_tree": "显示 JSON 树",
+    "prev_match": "上一个匹配",
+    "next_match": "下一个匹配",
+    "clear_search": "清除搜索",
+    "no_assertions": "测试脚本未记录任何断言。",
+    "console": "控制台",
+    "unknown_type": "未知类型",
+    "connection_probe": "连接探测（独立连接）",
+    "timing_dns": "DNS 解析",
+    "timing_tcp": "TCP 连接",
+    "timing_tls": "TLS 握手",
+    "wait_label_profiled": "等待 (TTFB)",
+    "pdf_preview": "PDF 预览"
   },
   "save_variable": {
     "title": "将响应值保存到变量",
@@ -174,7 +252,8 @@
     "error_path_no_match": "JSONPath 在此响应体中未匹配到任何内容。",
     "error_path_on_non_json": "响应体不是合法 JSON，无法应用 JSONPath。",
     "error_binary_no_path": "响应体是二进制内容。请用 JSONPath 提取字符串，或改用保存到文件。",
-    "error_env_missing": "所选环境已不存在。"
+    "error_env_missing": "所选环境已不存在。",
+    "json_path_placeholder": "$.token  ·  $.items[0].id  ·  （留空 = 整个响应体）"
   },
   "settings": {
     "settings": "设置",
@@ -262,7 +341,8 @@
     "no_search_results": "没有匹配的环境。",
     "import_error_invalid_json": "无法解析为 JSON。",
     "import_error_unrecognised": "不认识的格式。需要原生导出或 Postman 环境文件。",
-    "import_error_empty": "导入文件中未发现环境。"
+    "import_error_empty": "导入文件中未发现环境。",
+    "copy_suffix": " (副本)"
   },
   "kv": {
     "key_placeholder": "键",
@@ -381,7 +461,8 @@
     "export": "导出",
     "export_junit": "JUnit XML",
     "export_json": "JSON",
-    "export_html": "HTML 报告"
+    "export_html": "HTML 报告",
+    "running": "运行中…"
   },
   "mock": {
     "title": "Mock 服务器",
@@ -421,7 +502,8 @@
     "headers": "响应头",
     "status": "状态：",
     "time": "耗时：",
-    "size": "大小："
+    "size": "大小：",
+    "binary_notice": "[二进制响应体，{{n}} 个 base64 字符]"
   },
   "palette": {
     "placeholder": "搜索请求 / 历史 / 集合 / 环境…",
@@ -458,7 +540,9 @@
     "waiting": "等待服务器推送事件…",
     "not_connected": "未连接。点击 连接 开始接收事件。",
     "stream_open": "流已打开",
-    "stream_closed": "流已关闭"
+    "stream_closed": "流已关闭",
+    "id_label": "id:",
+    "retry_label": "重试: {{n}}ms"
   },
   "collection_settings": {
     "open_tooltip": "集合设置(描述、认证、变量、脚本)",

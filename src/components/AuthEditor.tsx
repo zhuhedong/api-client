@@ -902,7 +902,7 @@ function OAuth2Editor({
           type="button"
           onClick={fetchToken}
           disabled={fetching}
-          className="px-3 py-1.5 text-[12px] bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          className="px-3 py-1.5 text-[12px] bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
         >
           {fetching ? (
             <>

@@ -54,14 +54,12 @@ function toLookup(vars: EnvVariable[] | undefined): Record<string, string> {
  */
 export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const {
-    environments,
-    workspace,
-    addEnvironment,
-    deleteEnvironment,
-    updateEnvironment,
-    setActiveEnvironment,
-  } = useRequestStore();
+  const environments = useRequestStore((s) => s.environments);
+  const workspace = useRequestStore((s) => s.workspace);
+  const addEnvironment = useRequestStore((s) => s.addEnvironment);
+  const deleteEnvironment = useRequestStore((s) => s.deleteEnvironment);
+  const updateEnvironment = useRequestStore((s) => s.updateEnvironment);
+  const setActiveEnvironment = useRequestStore((s) => s.setActiveEnvironment);
 
   const [newEnvName, setNewEnvName] = useState("");
   const [search, setSearch] = useState("");
@@ -140,7 +138,7 @@ export function EnvironmentPanel({ onClose }: { onClose: () => void }) {
     const src = environments.find((e) => e.id === sourceId);
     if (!src) return;
     const newId = await createWithVariables(
-      `${src.name} (copy)`,
+      `${src.name}${t("env.copy_suffix")}`,
       src.variables.map((v) => ({ ...v })),
     );
     if (newId) setEditingEnvId(newId);

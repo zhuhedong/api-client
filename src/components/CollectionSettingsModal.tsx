@@ -97,7 +97,7 @@ export function CollectionSettingsModal({
         if (!next) onClose();
       }}
     >
-      <DialogContent className="flex h-[80vh] max-h-[85vh] w-[92vw] max-w-[640px] flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex max-h-[85vh] w-[92vw] max-w-[640px] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-4 py-3 text-left">
           <DialogTitle className="text-[13px]">
             {t("collection_settings.title", { name: collection.name })}

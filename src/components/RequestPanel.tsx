@@ -41,15 +41,15 @@ const BODY_TYPES: BodyType[] = [
   "graphql",
 ];
 
-const BODY_TYPE_LABELS: Record<BodyType, string> = {
-  none: "None",
-  json: "JSON",
-  text: "Text",
-  xml: "XML",
-  "form-data": "Form",
-  "x-www-form-urlencoded": "URL Encoded",
-  binary: "Binary",
-  graphql: "GraphQL",
+const BODY_TYPE_LABEL_KEYS: Record<BodyType, string> = {
+  none: "request.body_none",
+  json: "request.body_json",
+  text: "request.body_text",
+  xml: "request.body_xml",
+  "form-data": "request.body_form",
+  "x-www-form-urlencoded": "request.body_url_encoded",
+  binary: "request.body_binary",
+  graphql: "request.body_graphql",
 };
 
 /** Minimal introspection query — type names plus their field / input-field
@@ -111,36 +111,34 @@ function parseUrlQueryParams(rawUrl: string): { url: string; params: KeyValue[] 
 export function RequestPanel() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<RequestTab>("params");
-  const {
-    activeRequest,
-    loading,
-    setMethod,
-    setUrl,
-    setHeaders,
-    setParams,
-    setBody,
-    setBodyType,
-    setFormData,
-    setAuth,
-    setName,
-    setTimeoutMs,
-    setVerifyTls,
-    setRedirectPolicy,
-    setMaxRedirects,
-    setProxyUrl,
-    setClientCert,
-    setProtocol,
-    setGraphqlQuery,
-    setGraphqlVariables,
-    setPreScript,
-    setTestScript,
-    setTags,
-    updateActiveRequest,
-    sendRequest,
-    cancelRequest,
-    defaultTimeoutMs,
-    verifyTlsDefault,
-  } = useRequestStore();
+  const activeRequest = useRequestStore((s) => s.activeRequest);
+  const loading = useRequestStore((s) => s.loading);
+  const setMethod = useRequestStore((s) => s.setMethod);
+  const setUrl = useRequestStore((s) => s.setUrl);
+  const setHeaders = useRequestStore((s) => s.setHeaders);
+  const setParams = useRequestStore((s) => s.setParams);
+  const setBody = useRequestStore((s) => s.setBody);
+  const setBodyType = useRequestStore((s) => s.setBodyType);
+  const setFormData = useRequestStore((s) => s.setFormData);
+  const setAuth = useRequestStore((s) => s.setAuth);
+  const setName = useRequestStore((s) => s.setName);
+  const setTimeoutMs = useRequestStore((s) => s.setTimeoutMs);
+  const setVerifyTls = useRequestStore((s) => s.setVerifyTls);
+  const setRedirectPolicy = useRequestStore((s) => s.setRedirectPolicy);
+  const setMaxRedirects = useRequestStore((s) => s.setMaxRedirects);
+  const setProxyUrl = useRequestStore((s) => s.setProxyUrl);
+  const setClientCert = useRequestStore((s) => s.setClientCert);
+  const setProtocol = useRequestStore((s) => s.setProtocol);
+  const setGraphqlQuery = useRequestStore((s) => s.setGraphqlQuery);
+  const setGraphqlVariables = useRequestStore((s) => s.setGraphqlVariables);
+  const setPreScript = useRequestStore((s) => s.setPreScript);
+  const setTestScript = useRequestStore((s) => s.setTestScript);
+  const setTags = useRequestStore((s) => s.setTags);
+  const updateActiveRequest = useRequestStore((s) => s.updateActiveRequest);
+  const sendRequest = useRequestStore((s) => s.sendRequest);
+  const cancelRequest = useRequestStore((s) => s.cancelRequest);
+  const defaultTimeoutMs = useRequestStore((s) => s.defaultTimeoutMs);
+  const verifyTlsDefault = useRequestStore((s) => s.verifyTlsDefault);
 
   const urlRef = useRef<HTMLInputElement>(null);
   const [showCurlImport, setShowCurlImport] = useState(false);
@@ -154,6 +152,9 @@ export function RequestPanel() {
   const [gqlSchemaState, setGqlSchemaState] = useState<
     "idle" | "loading" | "ok" | "error"
   >("idle");
+  // User-resizable height for the JSON / text body editor. Survives tab
+  // switches (this panel stays mounted); resets to the default on reload.
+  const [bodyEditorHeight, setBodyEditorHeight] = useState(220);
 
   const addTag = (raw: string) => {
     const t = raw.trim();
@@ -331,13 +332,13 @@ export function RequestPanel() {
           onValueChange={(v) => setProtocol(v as "http" | "websocket" | "sse")}
         >
           <TabsList className="h-7">
-            <TabsTrigger value="http" className="!text-[11px]" title="HTTP">
+            <TabsTrigger value="http" className="!text-[11px]" title={t("request.protocol_http")}>
               HTTP
             </TabsTrigger>
             <TabsTrigger
               value="websocket"
               className="!text-[11px]"
-              title="WebSocket"
+              title={t("request.protocol_websocket")}
             >
               <Cable size={11} className="-mt-0.5 mr-0.5 inline" />
               WS
@@ -345,7 +346,7 @@ export function RequestPanel() {
             <TabsTrigger
               value="sse"
               className="!text-[11px]"
-              title="Server-Sent Events"
+              title={t("request.protocol_sse")}
             >
               <Radio size={11} className="-mt-0.5 mr-0.5 inline" />
               SSE
@@ -364,7 +365,7 @@ export function RequestPanel() {
             setTimeout(() => setCurlCopied(false), 2000);
           }}
           className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors shrink-0"
-          title="Copy as cURL"
+          title={t("sidebar.copy_as_curl")}
         >
           {curlCopied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
           cURL
@@ -372,7 +373,7 @@ export function RequestPanel() {
         <button
           onClick={() => setShowCurlImport(true)}
           className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors shrink-0"
-          title="Import from cURL"
+          title={t("sidebar.import_from_curl")}
         >
           <FileDown size={12} />
           Import
@@ -380,7 +381,7 @@ export function RequestPanel() {
         <button
           onClick={() => setShowCodegen(true)}
           className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors shrink-0"
-          title="Generate code"
+          title={t("sidebar.generate_code")}
         >
           <Code2 size={12} />
           Code
@@ -402,7 +403,7 @@ export function RequestPanel() {
             <textarea
               value={curlInput}
               onChange={(e) => setCurlInput(e.target.value)}
-              placeholder={'Paste cURL command here...\ncurl -X POST https://api.example.com -H "Content-Type: application/json" -d \'{"key":"value"}\'  '}
+              placeholder={t("request.curl_import_placeholder")}
               className="input-apple w-full h-20 font-mono text-[11px] resize-none leading-relaxed"
               spellCheck={false}
               autoFocus
@@ -412,7 +413,7 @@ export function RequestPanel() {
                 onClick={() => { setShowCurlImport(false); setCurlInput(""); }}
                 className="text-[11px] text-muted-foreground hover:text-muted-foreground px-2 py-1"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={() => {
@@ -425,7 +426,7 @@ export function RequestPanel() {
                 }}
                 className="text-[11px] text-primary font-medium px-3 py-1 bg-primary/10 rounded-md hover:bg-primary/20 transition-colors"
               >
-                Import
+                {t("sidebar.import")}
               </button>
             </div>
           </div>
@@ -548,7 +549,7 @@ export function RequestPanel() {
           <KeyValueEditor
             items={activeRequest.params}
             onChange={setParams}
-            keyPlaceholder="Parameter"
+            keyPlaceholder={t("request.param_key_placeholder")}
             valuePlaceholder="Value"
             previewVars={scopedVars}
           />
@@ -558,7 +559,7 @@ export function RequestPanel() {
           <KeyValueEditor
             items={activeRequest.headers}
             onChange={setHeaders}
-            keyPlaceholder="Header"
+            keyPlaceholder={t("request.header_key_placeholder")}
             valuePlaceholder="Value"
             previewVars={scopedVars}
           />
@@ -573,7 +574,7 @@ export function RequestPanel() {
               <TabsList className="h-auto flex-wrap justify-start">
                 {BODY_TYPES.map((type) => (
                   <TabsTrigger key={type} value={type}>
-                    {BODY_TYPE_LABELS[type]}
+                    {t(BODY_TYPE_LABEL_KEYS[type])}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -583,7 +584,7 @@ export function RequestPanel() {
               <KeyValueEditor
                 items={activeRequest.formData}
                 onChange={setFormData}
-                keyPlaceholder="Field name"
+                keyPlaceholder={t("request.field_key_placeholder")}
                 valuePlaceholder="Value"
                 allowFiles={activeRequest.bodyType === "form-data"}
                 previewVars={scopedVars}
@@ -598,7 +599,7 @@ export function RequestPanel() {
                       binaryFilePath: e.target.value || undefined,
                     })
                   }
-                  placeholder="Path to a file sent as the raw request body"
+                  placeholder={t("request.binary_path_placeholder")}
                   className="flex-1 text-[12px] font-mono"
                 />
                 <Button
@@ -612,7 +613,7 @@ export function RequestPanel() {
                       updateActiveRequest({ binaryFilePath: picked });
                   }}
                 >
-                  Browse…
+                  {t("common.browse")}
                 </Button>
                 {activeRequest.binaryFilePath && (
                   <Button
@@ -624,7 +625,7 @@ export function RequestPanel() {
                       updateActiveRequest({ binaryFilePath: undefined })
                     }
                   >
-                    Clear
+                    {t("common.clear")}
                   </Button>
                 )}
               </div>
@@ -632,16 +633,16 @@ export function RequestPanel() {
             {activeRequest.bodyType === "graphql" && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Query</label>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("request.gql_query")}</label>
                   <div className="flex items-center gap-2">
                     {gqlSchemaState === "ok" && (
                       <span className="text-[10px] text-success">
-                        {gqlFields.length} schema names
+                        {t("request.gql_schema_count", { n: gqlFields.length })}
                       </span>
                     )}
                     {gqlSchemaState === "error" && (
                       <span className="text-[10px] text-destructive">
-                        Schema fetch failed
+                        {t("request.gql_schema_failed")}
                       </span>
                     )}
                     <Button
@@ -652,7 +653,7 @@ export function RequestPanel() {
                       onClick={refreshGraphqlSchema}
                       disabled={gqlSchemaState === "loading"}
                     >
-                      {gqlSchemaState === "loading" ? "Loading…" : "Refresh schema"}
+                      {gqlSchemaState === "loading" ? t("common.loading") : t("request.gql_schema_refresh")}
                     </Button>
                   </div>
                 </div>
@@ -665,7 +666,7 @@ export function RequestPanel() {
                   graphqlFields={gqlFields}
                   placeholder={"query Example {\n  field\n}"}
                 />
-                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Variables (JSON)</label>
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{t("request.gql_variables")}</label>
                 <CodeEditor
                   value={activeRequest.graphqlVariables || ""}
                   onChange={setGraphqlVariables}
@@ -692,7 +693,7 @@ export function RequestPanel() {
                         className="h-6 px-2 text-[11px]"
                         onClick={handleBeautify}
                       >
-                        Beautify
+                        {t("request.beautify")}
                       </Button>
                     </div>
                   )}
@@ -703,12 +704,16 @@ export function RequestPanel() {
                       if (beautifyError) setBeautifyError(null);
                     }}
                     language={bodyTypeToLanguage(activeRequest.bodyType)}
-                    height={220}
+                    height={bodyEditorHeight}
+                    resizable
+                    minHeight={80}
+                    maxHeight={800}
+                    onHeightChange={setBodyEditorHeight}
                     completions={completionKeys}
                     placeholder={
                       activeRequest.bodyType === "json"
                         ? '{\n  "key": "value"\n}'
-                        : "Enter request body..."
+                        : t("request.body_placeholder")
                     }
                   />
                   {beautifyError && (
@@ -733,10 +738,7 @@ export function RequestPanel() {
         {activeTab === "pre" && !isStreaming && (
           <div className="space-y-2">
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Runs before the request is sent. Mutate variables with{" "}
-              <code className="text-muted-foreground">pm.environment.set(k, v)</code> /{" "}
-              <code className="text-muted-foreground">pm.variables.set(k, v)</code>. Script is
-              terminated after 5s.
+              {t("request.pre_request_hint")}
             </p>
             <CodeEditor
               value={activeRequest.preScript ?? ""}
@@ -755,10 +757,7 @@ export function RequestPanel() {
         {activeTab === "tests" && !isStreaming && (
           <div className="space-y-2">
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Runs after the response arrives. Use{" "}
-              <code className="text-muted-foreground">pm.test('name', fn)</code> with{" "}
-              <code className="text-muted-foreground">pm.expect(...)</code>. Results show in the
-              response panel.
+              {t("request.tests_hint")}
             </p>
             <CodeEditor
               value={activeRequest.testScript ?? ""}
@@ -802,7 +801,7 @@ export function RequestPanel() {
             <div>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 <Timer size={11} />
-                Timeout (ms)
+                {t("request.settings_timeout")}
               </label>
               <input
                 type="number"
@@ -815,34 +814,34 @@ export function RequestPanel() {
                     if (Number.isFinite(n) && n > 0) setTimeoutMs(n);
                   }
                 }}
-                placeholder={`Default: ${defaultTimeoutMs} ms`}
+                placeholder={t("request.settings_timeout_placeholder", { n: defaultTimeoutMs })}
                 className="input-apple w-48 text-[12px]"
                 min={1}
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Leave empty to use the global default.
+                {t("request.settings_timeout_hint")}
               </p>
             </div>
 
             <div>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 <Tag size={11} />
-                Tags
+                {t("request.settings_tags")}
               </label>
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {(activeRequest.tags ?? []).map((t) => {
-                  const c = tagColor(t);
+                {(activeRequest.tags ?? []).map((tag) => {
+                  const c = tagColor(tag);
                   return (
                     <span
-                      key={t}
+                      key={tag}
                       className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${c.bg} ${c.text}`}
                     >
-                      {t}
+                      {tag}
                       <button
                         type="button"
-                        onClick={() => removeTag(t)}
+                        onClick={() => removeTag(tag)}
                         className="hover:opacity-70"
-                        title={`Remove tag "${t}"`}
+                        title={t("request.settings_remove_tag", { name: tag })}
                       >
                         <X size={10} />
                       </button>
@@ -850,7 +849,7 @@ export function RequestPanel() {
                   );
                 })}
                 {(activeRequest.tags ?? []).length === 0 && (
-                  <span className="text-[11px] text-muted-foreground">No tags</span>
+                  <span className="text-[11px] text-muted-foreground">{t("request.settings_no_tags")}</span>
                 )}
               </div>
               <input
@@ -866,19 +865,18 @@ export function RequestPanel() {
                     if (tags.length > 0) removeTag(tags[tags.length - 1]);
                   }
                 }}
-                placeholder="Add tag and press Enter (e.g. auth, v2, broken)"
+                placeholder={t("request.settings_tag_placeholder")}
                 className="input-apple w-full text-[12px]"
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Tags help you filter and color-code requests in the sidebar. Persisted with the
-                collection on save.
+                {t("request.settings_tags_hint")}
               </p>
             </div>
 
             <div>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 <ShieldCheck size={11} />
-                TLS verification
+                {t("request.settings_tls")}
               </label>
               <Select
                 value={
@@ -898,20 +896,20 @@ export function RequestPanel() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="default" className="text-[12px]">
-                    Use default ({verifyTlsDefault ? "verify" : "skip"})
+                    {t("request.settings_tls_default", { mode: verifyTlsDefault ? t("request.settings_tls_default_verify") : t("request.settings_tls_default_skip") })}
                   </SelectItem>
                   <SelectItem value="on" className="text-[12px]">
-                    Verify certificates
+                    {t("request.settings_tls_on")}
                   </SelectItem>
                   <SelectItem value="off" className="text-[12px]">
-                    Skip verification (insecure)
+                    {t("request.settings_tls_off")}
                   </SelectItem>
                 </SelectContent>
               </Select>
               {activeRequest.verifyTls === false && (
                 <p className="text-[11px] text-warning mt-1 flex items-center gap-1">
                   <ShieldAlert size={11} />
-                  This request skips TLS verification.
+                  {t("request.settings_tls_skip_warn")}
                 </p>
               )}
             </div>
@@ -919,7 +917,7 @@ export function RequestPanel() {
             <div>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 <ArrowRightCircle size={11} />
-                Redirects
+                {t("request.settings_redirects")}
               </label>
               <div className="flex items-center gap-2">
                 <Select
@@ -933,16 +931,16 @@ export function RequestPanel() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="follow" className="text-[12px]">
-                      Follow (default)
+                      {t("request.settings_redirect_follow")}
                     </SelectItem>
                     <SelectItem value="none" className="text-[12px]">
-                      Do not follow
+                      {t("request.settings_redirect_none")}
                     </SelectItem>
                   </SelectContent>
                 </Select>
                 {(activeRequest.redirectPolicy ?? "follow") === "follow" && (
                   <>
-                    <span className="text-[11px] text-muted-foreground">max</span>
+                    <span className="text-[11px] text-muted-foreground">{t("request.settings_max")}</span>
                     <input
                       type="number"
                       min={0}
@@ -967,24 +965,24 @@ export function RequestPanel() {
             <div>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 <Globe size={11} />
-                Proxy
+                {t("request.settings_proxy")}
               </label>
               <input
                 type="text"
                 value={activeRequest.proxyUrl ?? ""}
                 onChange={(e) => setProxyUrl(e.target.value || undefined)}
-                placeholder="http://user:pass@host:8080  or  socks5://host:1080"
+                placeholder={t("request.settings_proxy_placeholder")}
                 className="input-apple w-full text-[12px] font-mono"
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Routes this request through the given proxy. Supports HTTP, HTTPS, and SOCKS5.
+                {t("request.settings_proxy_hint")}
               </p>
             </div>
 
             <div>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 <Lock size={11} />
-                Client certificate (mTLS)
+                {t("request.settings_client_cert")}
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -999,7 +997,7 @@ export function RequestPanel() {
                         password: activeRequest.clientCert?.password,
                       });
                   }}
-                  placeholder="Path to .p12 / .pfx bundle"
+                  placeholder={t("request.settings_cert_placeholder")}
                   className="input-apple flex-1 text-[12px] font-mono"
                 />
                 <Button
@@ -1021,7 +1019,7 @@ export function RequestPanel() {
                       });
                   }}
                 >
-                  Browse…
+                  {t("common.browse")}
                 </Button>
                 {activeRequest.clientCert?.path && (
                   <Button
@@ -1031,7 +1029,7 @@ export function RequestPanel() {
                     className="h-9 text-[11px] text-destructive hover:text-destructive"
                     onClick={() => setClientCert(undefined)}
                   >
-                    Clear
+                    {t("common.clear")}
                   </Button>
                 )}
               </div>
@@ -1045,12 +1043,12 @@ export function RequestPanel() {
                       password: e.target.value || undefined,
                     })
                   }
-                  placeholder="Bundle passphrase (optional)"
+                  placeholder={t("request.settings_cert_pass_placeholder")}
                   className="input-apple w-full mt-2 text-[12px] font-mono"
                 />
               )}
               <p className="text-[11px] text-muted-foreground mt-1">
-                PKCS#12 bundle containing both the client cert and its private key.
+                {t("request.settings_cert_hint")}
               </p>
             </div>
           </div>

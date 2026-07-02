@@ -21,7 +21,7 @@ import type {
   HistoryEntry,
   Workspace,
 } from "../../types";
-import { createNewRequest, historyEntryToRequest } from "../storeHelpers";
+import { createNewRequest, ensureCollectionVarIds, ensureVarIds, historyEntryToRequest } from "../storeHelpers";
 import { syncDerived, type RequestState } from "../storeTypes";
 
 /**
@@ -140,9 +140,15 @@ export function createWorkspaceSlice(
           : restoredTabs[0].id;
 
         set((s) => ({
-          workspace: target,
-          collections,
-          environments,
+          workspace: {
+            ...target,
+            variables: target.variables ? ensureVarIds(target.variables) : target.variables,
+          },
+          collections: collections.map(ensureCollectionVarIds),
+          environments: environments.map((e) => ({
+            ...e,
+            variables: ensureVarIds(e.variables),
+          })),
           history,
           tabs: restoredTabs,
           activeTabId: restoredActiveId,
@@ -207,7 +213,12 @@ export function createWorkspaceSlice(
 
     refreshWorkspaces: async () => {
       const workspaces = await invoke<Workspace[]>("list_workspaces");
-      set({ workspaces });
+      set({
+        workspaces: workspaces.map((w) => ({
+          ...w,
+          variables: w.variables ? ensureVarIds(w.variables) : w.variables,
+        })),
+      });
     },
 
     setWindowState: (patch) => {

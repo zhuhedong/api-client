@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import type { ResponseSnapshot } from "../types";
 import { diffLines, diffHeaders } from "../utils/diff";
 import {
@@ -33,7 +34,7 @@ function formatTimestamp(ts: number): string {
 function decodeBody(body: string, encoding: "text" | "base64"): string {
   if (encoding === "text") return body;
   // Base64 → display a placeholder; comparing binary line-by-line is meaningless.
-  return `[binary body, ${body.length} base64 chars]`;
+  return i18n.t("diff.binary_notice", { n: body.length });
 }
 
 /** Pretty-print JSON if applicable; otherwise return as-is. */

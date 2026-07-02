@@ -53,7 +53,7 @@ export function VariablesEditor({
   const add = () => {
     onChange([
       ...value,
-      { key: "", value: "", enabled: true, is_secret: false },
+      { id: crypto.randomUUID(), key: "", value: "", enabled: true, is_secret: false },
     ]);
   };
 
@@ -67,7 +67,7 @@ export function VariablesEditor({
       {value.length > 0 && <VariableHeader />}
       {value.map((variable, i) => (
         <VariableRow
-          key={i}
+          key={variable.id ?? i}
           variable={variable}
           previewVars={previewVars}
           onChange={(partial) => update(i, partial)}

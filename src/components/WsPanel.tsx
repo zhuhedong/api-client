@@ -50,7 +50,7 @@ export function WsPanel() {
           ) : (
             <button
               onClick={() => wsClose()}
-              className="px-3 py-1 bg-destructive text-white font-medium rounded-lg text-[12px] hover:bg-destructive/90 active:scale-[0.97] transition-all"
+              className="px-3 py-1 bg-destructive text-destructive-foreground font-medium rounded-lg text-[12px] hover:bg-destructive/90 active:scale-[0.97] transition-all"
             >
               {t("ws.disconnect")}
             </button>

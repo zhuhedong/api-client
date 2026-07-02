@@ -21,6 +21,18 @@ export interface CodeEditorProps {
   /** GraphQL schema identifiers (type / field names) offered as completions in
    *  a graphql editor. Best-effort flat name matching, not grammar-aware. */
   graphqlFields?: string[];
+  /** When true, renders a drag handle below the editor so the user can resize
+   *  it. The initial height comes from `height`; pass `onHeightChange` to keep
+   *  the chosen height in sync with a parent-controlled `height` (so it
+   *  survives remounts). */
+  resizable?: boolean;
+  /** Minimum pixel height enforced while dragging. Defaults to 80. */
+  minHeight?: number;
+  /** Maximum pixel height enforced while dragging. Defaults to 800. */
+  maxHeight?: number;
+  /** Notified on every drag tick with the new pixel height. Use to lift the
+   *  height into parent state (controlled) so it persists across remounts. */
+  onHeightChange?: (px: number) => void;
 }
 
 // CodeMirror + language modes weigh in around ~600 kB minified. Lazy-load

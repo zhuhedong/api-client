@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { javascript } from "@codemirror/lang-javascript";
@@ -7,7 +7,9 @@ import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
+import { GripHorizontal } from "lucide-react";
 import { useDarkMode } from "../utils/useDarkMode";
+import i18n from "../i18n";
 import type { CodeEditorProps, CodeLanguage } from "./CodeEditor";
 
 /** Match the surrounding monospaced UI: small font, comfortable line height. */
@@ -103,8 +105,19 @@ export default function CodeEditorImpl({
   className,
   completions,
   graphqlFields,
+  resizable = false,
+  minHeight = 80,
+  maxHeight = 800,
+  onHeightChange,
 }: CodeEditorProps) {
   const isDark = useDarkMode();
+  // Draggable height lives in local state so the editor is usable standalone;
+  // it seeds from `height` and re-seeds on remount. When the parent also
+  // passes `onHeightChange` it can mirror the value into a controlled `height`
+  // so the chosen size survives tab switches / remounts.
+  const [autoHeight, setAutoHeight] = useState<number>(() =>
+    typeof height === "number" ? height : 220,
+  );
   const extensions = useMemo(() => {
     const exts = [...baseExtensions, ...langExtension(language)];
     if (
@@ -120,34 +133,74 @@ export default function CodeEditorImpl({
     return exts;
   }, [language, completions, graphqlFields]);
 
+  const pxHeight = resizable
+    ? autoHeight
+    : typeof height === "number"
+      ? height
+      : undefined;
   const containerStyle =
-    height === "auto"
+    height === "auto" && !resizable
       ? { minHeight: 80 }
-      : { height: typeof height === "number" ? `${height}px` : height };
+      : { height: `${pxHeight}px` };
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = autoHeight;
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(
+        minHeight,
+        Math.min(maxHeight, startH + (ev.clientY - startY)),
+      );
+      setAutoHeight(next);
+      onHeightChange?.(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  };
 
   return (
-    <div
-      style={containerStyle}
-      className={`rounded-lg border border-border overflow-hidden bg-card ${className ?? ""}`}
-    >
-      <CodeMirror
-        value={value}
-        onChange={onChange}
-        extensions={extensions}
-        theme={isDark ? oneDark : undefined}
-        height={height === "auto" ? undefined : `${height}px`}
-        basicSetup={{
-          lineNumbers: showGutter,
-          foldGutter: showGutter,
-          highlightActiveLine: !readOnly,
-          highlightActiveLineGutter: !readOnly,
-          autocompletion: !readOnly,
-          tabSize: 2,
-        }}
-        placeholder={placeholder}
-        editable={!readOnly}
-        autoFocus={autoFocus}
-      />
+    <div className={resizable ? "" : `rounded-lg border border-border overflow-hidden bg-card ${className ?? ""}`}>
+      <div
+        style={containerStyle}
+        className={resizable ? `rounded-lg border border-border overflow-hidden bg-card ${className ?? ""}` : undefined}
+      >
+        <CodeMirror
+          value={value}
+          onChange={onChange}
+          extensions={extensions}
+          theme={isDark ? oneDark : undefined}
+          height={pxHeight !== undefined ? `${pxHeight}px` : undefined}
+          basicSetup={{
+            lineNumbers: showGutter,
+            foldGutter: showGutter,
+            highlightActiveLine: !readOnly,
+            highlightActiveLineGutter: !readOnly,
+            autocompletion: !readOnly,
+            tabSize: 2,
+          }}
+          placeholder={placeholder}
+          editable={!readOnly}
+          autoFocus={autoFocus}
+        />
+      </div>
+      {resizable && (
+        <div
+          onMouseDown={startResize}
+          title={i18n.t("common.drag_to_resize")}
+          className="flex items-center justify-center h-2.5 mt-0.5 cursor-row-resize rounded-b-md text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent/40 select-none"
+        >
+          <GripHorizontal size={12} />
+        </div>
+      )}
     </div>
   );
 }

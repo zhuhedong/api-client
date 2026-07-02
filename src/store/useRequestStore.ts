@@ -29,6 +29,8 @@ import {
 } from "../utils/variableMutations";
 import {
   createNewRequest,
+  ensureCollectionVarIds,
+  ensureVarIds,
   findRequestInCollection,
   generateId,
   historyEntryToRequest,
@@ -196,11 +198,20 @@ export const useRequestStore = create<RequestState>((set, get) => {
           : get().activeTabId;
 
         set((s) => ({
-          workspace,
-          workspaces,
+          workspace: {
+            ...workspace,
+            variables: workspace.variables ? ensureVarIds(workspace.variables) : workspace.variables,
+          },
+          workspaces: workspaces.map((w) => ({
+            ...w,
+            variables: w.variables ? ensureVarIds(w.variables) : w.variables,
+          })),
           history,
-          collections,
-          environments,
+          collections: collections.map(ensureCollectionVarIds),
+          environments: environments.map((e) => ({
+            ...e,
+            variables: ensureVarIds(e.variables),
+          })),
           defaultTimeoutMs,
           verifyTlsDefault,
           maxBodyBytes,

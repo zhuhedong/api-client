@@ -136,22 +136,20 @@ export function Sidebar() {
     return () => window.removeEventListener("api-client:open-settings", onOpenSettings);
   }, []);
 
-  const {
-    collections,
-    environments,
-    workspace,
-    createNewRequest,
-    addCollection,
-    deleteCollection,
-    renameCollection,
-    addRequestToCollection,
-    reorderCollections,
-    importPostmanCollection,
-    importCollections,
-    setActiveEnvironment,
-    activeRequestId,
-    refreshRecent,
-  } = useRequestStore();
+  const collections = useRequestStore((s) => s.collections);
+  const environments = useRequestStore((s) => s.environments);
+  const workspace = useRequestStore((s) => s.workspace);
+  const createNewRequest = useRequestStore((s) => s.createNewRequest);
+  const addCollection = useRequestStore((s) => s.addCollection);
+  const deleteCollection = useRequestStore((s) => s.deleteCollection);
+  const renameCollection = useRequestStore((s) => s.renameCollection);
+  const addRequestToCollection = useRequestStore((s) => s.addRequestToCollection);
+  const reorderCollections = useRequestStore((s) => s.reorderCollections);
+  const importPostmanCollection = useRequestStore((s) => s.importPostmanCollection);
+  const importCollections = useRequestStore((s) => s.importCollections);
+  const setActiveEnvironment = useRequestStore((s) => s.setActiveEnvironment);
+  const activeRequestId = useRequestStore((s) => s.activeRequestId);
+  const refreshRecent = useRequestStore((s) => s.refreshRecent);
 
   // Refresh the recents list when the tab is switched on so the user sees
   // entries recorded in other workspaces / windows.
@@ -428,7 +426,7 @@ export function Sidebar() {
                       if (e.key === "Enter") handleAddCollection();
                       if (e.key === "Escape") setShowNewCollection(false);
                     }}
-                    placeholder="Collection name"
+                    placeholder={t("sidebar.collection_name")}
                     className="h-8 flex-1 text-[12px]"
                     autoFocus
                   />
@@ -436,7 +434,7 @@ export function Sidebar() {
                     onClick={handleAddCollection}
                     className="text-[11px] text-primary font-medium px-2 py-1 hover:bg-primary/10 rounded-md transition-colors"
                   >
-                    Add
+                    {t("common.add")}
                   </button>
                   <button
                     onClick={() => setShowNewCollection(false)}
@@ -452,15 +450,15 @@ export function Sidebar() {
                     className="flex items-center gap-1.5 text-[12px] text-primary hover:text-primary/90 transition-colors py-1"
                   >
                     <FolderPlus size={13} strokeWidth={2} />
-                    New Collection
+                    {t("sidebar.new_collection")}
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-                    title="Import Postman / OpenAPI / Insomnia / HAR / .http file"
+                    title={t("sidebar.import_tooltip")}
                   >
                     <Upload size={11} />
-                    Import
+                    {t("sidebar.import")}
                   </button>
                   <input
                     ref={fileInputRef}
@@ -477,7 +475,7 @@ export function Sidebar() {
               {collections.length === 0 && !showNewCollection && (
                 <div className="text-center py-12">
                   <FolderOpen size={28} className="mx-auto text-muted-foreground mb-2" strokeWidth={1.5} />
-                  <p className="text-muted-foreground text-[12px]">No collections yet</p>
+                  <p className="text-muted-foreground text-[12px]">{t("sidebar.no_collections")}</p>
                 </div>
               )}
               {collections.map((collection) => (
@@ -515,7 +513,7 @@ export function Sidebar() {
                       <span
                         className="truncate flex-1"
                         onDoubleClick={() => startRenameCollection(collection.id, collection.name)}
-                        title="Double-click to rename"
+                        title={t("common.double_click_to_rename")}
                       >
                         {collection.name}
                       </span>
@@ -529,7 +527,7 @@ export function Sidebar() {
                         startRenameCollection(collection.id, collection.name);
                       }}
                       className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
-                      title="Rename collection"
+                      title={t("sidebar.rename_collection")}
                     >
                       <Pencil size={11} className="text-muted-foreground" />
                     </button>
@@ -551,8 +549,8 @@ export function Sidebar() {
                       className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all ${collection.auth && collection.auth.auth_type !== "none" ? "!opacity-100" : ""}`}
                       title={
                         collection.auth && collection.auth.auth_type !== "none"
-                          ? `Edit collection auth (currently ${collection.auth.auth_type})`
-                          : "Set collection auth (inherited by requests with 'Inherit')"
+                          ? t("sidebar.edit_collection_auth", { type: collection.auth.auth_type })
+                          : t("sidebar.set_collection_auth")
                       }
                     >
                       <KeyRound
@@ -568,8 +566,8 @@ export function Sidebar() {
                       className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all ${collection.variables && collection.variables.length > 0 ? "!opacity-100" : ""}`}
                       title={
                         collection.variables && collection.variables.length > 0
-                          ? `Edit collection variables (${collection.variables.length} defined)`
-                          : "Set collection-scoped variables"
+                          ? t("sidebar.edit_collection_variables", { n: collection.variables.length })
+                          : t("sidebar.set_collection_variables")
                       }
                     >
                       <Braces
@@ -583,7 +581,7 @@ export function Sidebar() {
                         setRunnerCollectionId(collection.id);
                       }}
                       className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
-                      title="Run collection"
+                      title={t("sidebar.run_collection")}
                     >
                       <Play size={11} className="text-muted-foreground" />
                     </button>
@@ -635,7 +633,7 @@ export function Sidebar() {
                         addRequestToCollection(collection.id);
                       }}
                       className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-primary/10 rounded-md transition-all"
-                      title="Save current request to collection"
+                      title={t("sidebar.save_request_to_folder")}
                     >
                       <Plus size={11} className="text-primary" />
                     </button>

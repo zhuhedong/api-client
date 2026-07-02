@@ -86,7 +86,9 @@ interface Props {
 
 export function CollectionRunnerModal({ collectionId, onClose }: Props) {
   const { t } = useTranslation();
-  const { collections, environments, workspace } = useRequestStore();
+  const collections = useRequestStore((s) => s.collections);
+  const environments = useRequestStore((s) => s.environments);
+  const workspace = useRequestStore((s) => s.workspace);
 
   const col = collections.find((c) => c.id === collectionId);
 
@@ -246,7 +248,7 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
         if (!next) onClose();
       }}
     >
-      <DialogContent className="flex h-[80vh] max-h-[85vh] w-[92vw] max-w-[820px] flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex max-h-[85vh] w-[92vw] max-w-[820px] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-4 py-3 text-left">
           <DialogTitle className="text-[13px]">
             {t("runner.title", { name: col.name })}
@@ -408,7 +410,7 @@ export function CollectionRunnerModal({ collectionId, onClose }: Props) {
           {running && (
             <div className="flex items-center gap-2 py-2">
               <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <span className="text-[11px] text-muted-foreground">Running…</span>
+              <span className="text-[11px] text-muted-foreground">{t("runner.running")}</span>
             </div>
           )}
       </div>

@@ -171,7 +171,19 @@ export function ResponsePanel() {
   // user gets non-blocking visual feedback. Each entry is { kind, text };
   // it auto-clears after 2 s via the timeout below.
   const [actionFlash, setActionFlash] = useState<string | null>(null);
-  const { response, loading, error, activeRequest, testResults, scriptLogs, scriptError, responseHistory, environments, workspace, collections, profileTiming, setProfileTiming } = useRequestStore();
+  const response = useRequestStore((s) => s.response);
+  const loading = useRequestStore((s) => s.loading);
+  const error = useRequestStore((s) => s.error);
+  const activeRequest = useRequestStore((s) => s.activeRequest);
+  const testResults = useRequestStore((s) => s.testResults);
+  const scriptLogs = useRequestStore((s) => s.scriptLogs);
+  const scriptError = useRequestStore((s) => s.scriptError);
+  const responseHistory = useRequestStore((s) => s.responseHistory);
+  const environments = useRequestStore((s) => s.environments);
+  const workspace = useRequestStore((s) => s.workspace);
+  const collections = useRequestStore((s) => s.collections);
+  const profileTiming = useRequestStore((s) => s.profileTiming);
+  const setProfileTiming = useRequestStore((s) => s.setProfileTiming);
   const snapshots = activeRequest ? responseHistory[activeRequest.id] ?? [] : [];
   const canDiff = snapshots.length >= 2;
 
@@ -431,7 +443,7 @@ export function ResponsePanel() {
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-[13px] text-muted-foreground">Sending…</span>
+          <span className="text-[13px] text-muted-foreground">{t("response.sending")}</span>
         </div>
       </div>
     );
@@ -451,7 +463,7 @@ export function ResponsePanel() {
             <button
               type="button"
               onClick={() => void useRequestStore.getState().sendRequest()}
-              className="px-3 py-1.5 rounded-lg bg-primary text-white text-[12px] font-medium hover:opacity-90 transition"
+              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[12px] font-medium hover:opacity-90 transition"
             >
               {t("response.retry")}
             </button>
@@ -468,7 +480,7 @@ export function ResponsePanel() {
           <ArrowUpRight size={32} className="mx-auto text-muted-foreground/50 mb-3" strokeWidth={1.5} />
           <p className="text-muted-foreground text-[13px]">{t("response.no_response")}</p>
           <p className="text-muted-foreground/70 text-[11px] mt-1.5">
-            Press <kbd className="px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground text-[10px] font-mono">⏎</kbd> to send
+            {t("response.press_enter_prefix")} <kbd className="px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground text-[10px] font-mono">⏎</kbd> {t("response.press_enter_suffix")}
           </p>
         </div>
       </div>
@@ -494,7 +506,7 @@ export function ResponsePanel() {
         <button
           type="button"
           onClick={() => setProfileTiming(!profileTiming)}
-          title="Measure DNS / TCP / TLS on the next send (opens a separate probe connection)"
+          title={t("response.profile_tooltip")}
           className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
             profileTiming
               ? "bg-primary/10 text-primary"
@@ -502,7 +514,7 @@ export function ResponsePanel() {
           }`}
         >
           <Timer size={11} />
-          Profile
+          {t("response.profile")}
         </button>
 
         <div className="ml-auto flex items-center gap-1">
@@ -530,8 +542,8 @@ export function ResponsePanel() {
                       }`}
                     >
                       {failedCount > 0
-                        ? `${failedCount}/${tests.length} failed`
-                        : `${passedCount}/${tests.length} passed`}
+                        ? t("response.tests_failed", { failed: failedCount, total: tests.length })
+                        : t("response.tests_passed", { passed: passedCount, total: tests.length })}
                     </span>
                   )}
                 </TabsTrigger>
@@ -543,14 +555,14 @@ export function ResponsePanel() {
               <button
                 onClick={() => setJsonPathOpen((v) => !v)}
                 className={`ml-1.5 w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${jsonPathOpen || jsonPath ? "bg-primary/15" : "hover:bg-accent"}`}
-                title="Filter response with JSONPath"
+                title={t("response.filter_jsonpath_tooltip")}
               >
                 <Filter size={14} className={jsonPathOpen || jsonPath ? "text-primary" : "text-muted-foreground"} />
               </button>
               <button
                 onClick={() => setBodyView((v) => (v === "raw" ? "tree" : "raw"))}
                 className={`ml-1.5 w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${bodyView === "tree" ? "bg-primary/15" : "hover:bg-accent"}`}
-                title={bodyView === "tree" ? "Show raw JSON" : "Show JSON tree"}
+                title={bodyView === "tree" ? t("response.show_raw") : t("response.show_tree")}
               >
                 {bodyView === "tree" ? (
                   <FileCode2 size={14} className="text-primary" />
@@ -571,14 +583,14 @@ export function ResponsePanel() {
             onClick={() => setDiffOpen(true)}
             disabled={!canDiff}
             className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${canDiff ? "hover:bg-accent active:bg-accent" : "opacity-40 cursor-not-allowed"}`}
-            title={canDiff ? `Compare with previous responses (${snapshots.length} captured)` : "Need 2+ responses to diff"}
+            title={canDiff ? t("response.compare_previous", { n: snapshots.length }) : t("response.diff_disabled")}
           >
             <GitCompare size={14} className="text-muted-foreground" />
           </button>
           <button
             onClick={copyBody}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent transition-colors"
-            title="Copy response"
+            title={t("response.copy_body")}
           >
             {copied ? <Check size={14} className="text-success" /> : <Copy size={14} className="text-muted-foreground" />}
           </button>
@@ -715,7 +727,7 @@ export function ResponsePanel() {
                   onClick={() => goToSearchMatch("previous")}
                   disabled={searchMatchCount === 0}
                   className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent disabled:opacity-35 disabled:cursor-not-allowed"
-                  title="Previous match"
+                  title={t("response.prev_match")}
                 >
                   <ChevronUp size={12} />
                 </button>
@@ -724,7 +736,7 @@ export function ResponsePanel() {
                   onClick={() => goToSearchMatch("next")}
                   disabled={searchMatchCount === 0}
                   className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent disabled:opacity-35 disabled:cursor-not-allowed"
-                  title="Next match"
+                  title={t("response.next_match")}
                 >
                   <ChevronDown size={12} />
                 </button>
@@ -732,7 +744,7 @@ export function ResponsePanel() {
                   type="button"
                   onClick={() => setSearchQuery("")}
                   className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent hover:text-muted-foreground"
-                  title="Clear search"
+                  title={t("response.clear_search")}
                 >
                   <X size={12} />
                 </button>
@@ -747,9 +759,7 @@ export function ResponsePanel() {
         {activeTab === "body" && response.body_truncated && (
           <div className="mb-2 flex items-center gap-2 text-[11px] text-warning bg-warning/10 rounded-lg px-2.5 py-1.5">
             <AlertTriangle size={12} />
-            Response was truncated for display ({formatSize(response.size_bytes)}). Use
-            <button onClick={saveResponseToDisk} className="underline hover:no-underline">Save</button>
-            to get the full body.
+            {t("response.truncated_notice", { size: formatSize(response.size_bytes) })}
           </div>
         )}
         {activeTab === "body" && isBinary && mime.startsWith("image/") && (
@@ -763,7 +773,7 @@ export function ResponsePanel() {
         )}
         {activeTab === "body" && isBinary && mime === "application/pdf" && (
           <iframe
-            title="PDF preview"
+            title={t("response.pdf_preview")}
             src={`data:application/pdf;base64,${response.body}`}
             className="w-full h-[640px] bg-muted rounded-lg"
           />
@@ -772,8 +782,7 @@ export function ResponsePanel() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <FileQuestion size={12} />
-              Binary response ({mime || "unknown type"}, {formatSize(response.size_bytes)}). Hex dump of
-              first 4&thinsp;KiB:
+              {t("response.binary_notice", { type: mime || t("response.unknown_type"), size: formatSize(response.size_bytes) })}
             </div>
             <pre className="text-[11px] font-mono text-foreground whitespace-pre leading-[1.55] bg-muted rounded-lg p-3 overflow-auto">
               {hexDump(response.body)}
@@ -848,13 +857,13 @@ export function ResponsePanel() {
             )}
             {tests && tests.length === 0 && !sErr && (
               <p className="text-[12px] text-muted-foreground">
-                Test script ran without recording any assertions.
+                {t("response.no_assertions")}
               </p>
             )}
             {logs && logs.length > 0 && (
               <div>
                 <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Console
+                  {t("response.console")}
                 </div>
                 <pre className="text-[11px] font-mono whitespace-pre-wrap bg-muted rounded-lg p-3">
                   {logs
@@ -907,6 +916,7 @@ interface TimingPillProps {
  * supplied one — legacy persisted responses may omit it).
  */
 function TimingPill({ timeMs, timings }: TimingPillProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   if (!timings) {
     return <span className="text-[11px] text-muted-foreground">{timeMs} ms</span>;
@@ -927,34 +937,34 @@ function TimingPill({ timeMs, timings }: TimingPillProps) {
       </span>
       {open && (
         <div className="absolute left-0 top-full mt-1 w-72 z-40 rounded-xl border border-border bg-card shadow-lg p-3 text-[11px]">
-          <div className="font-semibold text-muted-foreground mb-2">Response timing</div>
+          <div className="font-semibold text-muted-foreground mb-2">{t("response.timing_title")}</div>
           <div className="flex h-2 rounded-full overflow-hidden bg-muted mb-2">
             <div className="bg-primary/70" style={{ width: `${waitPct}%` }} />
             <div className="bg-success/70" style={{ width: `${dlPct}%` }} />
           </div>
           <div className="space-y-1">
             <Row
-              label={profiled ? "Wait (TTFB)" : "Wait (DNS + TCP + TLS + TTFB)"}
+              label={profiled ? t("response.wait_label_profiled") : t("response.wait_label")}
               ms={wait_ms}
               dotClass="bg-primary/70"
             />
-            <Row label="Download" ms={download_ms} dotClass="bg-success/70" />
+            <Row label={t("response.download_label")} ms={download_ms} dotClass="bg-success/70" />
             <div className="border-t border-border my-1" />
-            <Row label="Total" ms={total_ms} dotClass="bg-transparent" bold />
+            <Row label={t("response.total_label")} ms={total_ms} dotClass="bg-transparent" bold />
             {profiled && (
               <>
                 <div className="border-t border-border my-1" />
                 <div className="text-[10px] text-muted-foreground/70">
-                  Connection probe (separate connection)
+                  {t("response.connection_probe")}
                 </div>
                 {timings.dns_ms ? (
-                  <Row label="DNS lookup" ms={timings.dns_ms} dotClass="bg-orange/70" />
+                  <Row label={t("response.timing_dns")} ms={timings.dns_ms} dotClass="bg-orange/70" />
                 ) : null}
                 {timings.tcp_ms ? (
-                  <Row label="TCP connect" ms={timings.tcp_ms} dotClass="bg-purple/70" />
+                  <Row label={t("response.timing_tcp")} ms={timings.tcp_ms} dotClass="bg-purple/70" />
                 ) : null}
                 {timings.tls_ms ? (
-                  <Row label="TLS handshake" ms={timings.tls_ms} dotClass="bg-teal/70" />
+                  <Row label={t("response.timing_tls")} ms={timings.tls_ms} dotClass="bg-teal/70" />
                 ) : null}
               </>
             )}
